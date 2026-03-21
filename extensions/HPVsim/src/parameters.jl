@@ -503,11 +503,12 @@ const DEFAULT_BETA = 0.25
 """Male-to-female transmission multiplier relative to female-to-male."""
 const M2F_TRANS_RATIO = 3.69
 
-"""Default cross-immunity matrix entries."""
+"""Default cross-immunity matrix entries (matching Python hpvsim)."""
 const DEFAULT_CROSS_IMMUNITY = Dict{Symbol, Float64}(
-    :own     => 0.90,   # Same genotype
-    :partial => 0.50,   # Same risk group
-    :cross   => 0.30,   # Different risk group
+    :imm_init => 0.35,  # Mean initial immunity level (Python: imm_init beta(0.35, 0.025))
+    :own_hr   => 0.90,  # Same genotype for grouped types (Python: own_imm_hr)
+    :partial  => 0.50,  # Same risk group (Python: cross_imm_sus_high)
+    :cross    => 0.30,  # Different risk group (Python: cross_imm_sus_med)
 )
 
 """Default vaccination parameters."""

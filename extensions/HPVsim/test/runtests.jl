@@ -81,13 +81,14 @@ using Statistics: mean
     # ========================================================================
     @testset "HPVImmunityConnector construction" begin
         conn = HPVImmunityConnector()
-        @test conn.own_imm == 0.90
+        @test conn.imm_init == 0.35
+        @test conn.own_imm_hr == 0.90
         @test conn.partial_imm == 0.50
         @test conn.cross_imm == 0.30
-        @test conn.waning_rate == 0.05
+        @test conn.waning_rate == 0.0
 
         conn2 = HPVImmunityConnector(own_imm=0.80, waning_rate=0.10)
-        @test conn2.own_imm == 0.80
+        @test conn2.own_imm_hr == 0.80
         @test conn2.waning_rate == 0.10
     end
 
@@ -195,9 +196,14 @@ using Statistics: mean
         @test length(conn.hpv_diseases) == 3
         @test size(conn.imm_matrix) == (3, 3)
 
-        # Diagonal = own_imm, off-diagonal = partial_imm (all high-risk)
+        # Diagonal = own-immunity: 1.0 for hpv16/hpv18, own_imm_hr for others
         for i in 1:3
-            @test conn.imm_matrix[i, i] == conn.own_imm
+            gn = conn.genotype_names[i]
+            if gn in HPVsim.INDIVIDUAL_TYPE_GENOTYPES
+                @test conn.imm_matrix[i, i] == 1.0
+            else
+                @test conn.imm_matrix[i, i] == conn.own_imm_hr
+            end
         end
 
         # Each genotype has results

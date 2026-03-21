@@ -249,7 +249,10 @@ function _give_hpv_doses!(v::HPVVaccination, sim, uids::Vector{Int})
     return
 end
 
-"""Update vaccine protection with waning and apply to rel_sus."""
+"""Update vaccine protection with waning and apply to rel_sus.
+
+Vaccine protection is SUBTRACTED from current rel_sus (additive with natural immunity),
+matching Python hpvsim where vaccine NAb immunity is summed with natural immunity."""
 function _update_hpv_vaccine_protection!(v::HPVVaccination, sim)
     isempty(v.covered_diseases) && return
     dt = sim.pars.dt
@@ -273,11 +276,9 @@ function _update_hpv_vaccine_protection!(v::HPVVaccination, sim)
             waned_factor = exp(-v.waning_rate * time_since)
 
             vx_eff = waned_factor * dose_eff * genotype_eff
-            vx_sus = 1.0 - vx_eff
-
-            if vx_sus < rel_sus_raw[u]
-                rel_sus_raw[u] = vx_sus
-            end
+            # Additive: subtract vaccine protection from current rel_sus
+            # (natural immunity already reduced rel_sus from 1.0 in connector step)
+            rel_sus_raw[u] = max(0.0, rel_sus_raw[u] - vx_eff)
         end
     end
     return

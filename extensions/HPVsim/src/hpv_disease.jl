@@ -133,6 +133,22 @@ Starsim.module_data(d::HPVGenotype)  = d.infection.dd.mod
 # Lifecycle
 # ============================================================================
 
+"""Reset rel_sus to 1.0 each timestep so immunity/vaccination can be reapplied cleanly."""
+function Starsim.start_step!(d::HPVGenotype, sim)
+    # Call base start_step! for jump distributions
+    md = Starsim.module_data(d)
+    for dist in md.dists
+        Starsim.jump_dt!(dist, md.t.ti)
+    end
+    # Reset rel_sus so immunity and vaccination are recalculated fresh
+    active = sim.people.auids.values
+    rel_sus_raw = d.infection.rel_sus.raw
+    @inbounds for u in active
+        rel_sus_raw[u] = 1.0
+    end
+    return d
+end
+
 function Starsim.init_pre!(d::HPVGenotype, sim)
     md = Starsim.module_data(d)
     md.t = Starsim.Timeline(start=sim.pars.start, stop=sim.pars.stop, dt=sim.pars.dt)

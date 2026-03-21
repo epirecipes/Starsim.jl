@@ -41,6 +41,7 @@ include("sim.jl")
 export HPVGenotype, GenotypeParams, GenotypeDef,
        HPVImmunityConnector,
        HPVVaccination, HPVScreening, HPVTherapeuticVaccine,
+       HPVDeaths,
        TreatmentType, ABLATION, EXCISION, GENERIC,
        get_treatment_efficacy,
        HPVNet, HPVSim,
