@@ -319,11 +319,14 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
         g_mask  = c.disease_G_masks[nm]
         p_mask  = c.disease_P_masks[nm]
 
-        # Pre-compute partial match indices and all-strain indices OUTSIDE the agent loop
+        # Find this disease's per-strain decay index
+        disease_gp = (disease.G, disease.P)
+        disease_strain_idx = findfirst(==(disease_gp), gp_keys)
+
+        # Pre-compute partial match indices OUTSIDE the agent loop
         partial_indices = Int[]
-        all_indices = collect(1:n_strains)
         for (idx, gp) in enumerate(gp_keys)
-            if gp != (disease.G, disease.P) && (gp[1] == disease.G || gp[2] == disease.P)
+            if gp != disease_gp && (gp[1] == disease.G || gp[2] == disease.P)
                 push!(partial_indices, idx)
             end
         end
@@ -340,7 +343,8 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
 
             if has_exact
                 efficacy = c.homotypic_efficacy
-                decay = homo_decay_raw[u]
+                # Use this disease's per-strain decay (not shared homo factor)
+                decay = disease_strain_idx !== nothing ? strain_raw_arrays[disease_strain_idx][u] : 0.0
             else
                 has_g = (g_bits_raw[u] & g_mask) != 0
                 has_p = (p_bits_raw[u] & p_mask) != 0
@@ -355,14 +359,10 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
                         end
                     end
                 else
+                    # Complete heterotypic: no shared G or P types.
+                    # Match Python: decay stays 0.0 (no cross-immunity for unrelated strains)
                     efficacy = c.complete_hetero_efficacy
                     decay = 0.0
-                    for idx in all_indices
-                        v = strain_raw_arrays[idx][u]
-                        if v > decay
-                            decay = v
-                        end
-                    end
                 end
             end
 

@@ -106,8 +106,10 @@ function _create_strain_diseases(
 
         push!(diseases, Rotavirus(;
             G = G, P = P,
-            init_prev = prevalence,
-            beta      = adjusted_beta,
+            init_prev    = prevalence,
+            beta         = adjusted_beta,
+            dur_inf_mean = 4.0,  # Match Python rotasim Sim default (lognorm_ex mean=4 days)
+            dur_inf_std  = 1.0,  # Match Python rotasim Sim default (lognorm_ex std=1.0 days)
         ))
     end
 

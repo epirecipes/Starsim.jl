@@ -41,8 +41,13 @@ mutable struct Rotavirus <: Starsim.AbstractInfection
 
     # Parameters (in days)
     dur_inf_mean::Float64
+    dur_inf_std::Float64
     waning_rate_mean::Float64
     waning_rate_std::Float64
+
+    # Pre-computed lognormal parameters (from dur_inf_mean/std)
+    dur_inf_logmu::Float64
+    dur_inf_logsig::Float64
 
     # Cached connector reference (set during init_pre!; typed Any to break circular dep)
     immunity_connector::Any
@@ -56,6 +61,7 @@ function Rotavirus(;
     init_prev::Real     = 0.01,
     beta::Real          = 0.1,
     dur_inf_mean::Real  = 7.0,
+    dur_inf_std::Real   = 1.0,
     waning_rate_mean::Real = 180.0,
     waning_rate_std::Real  = 10.0,
     name::Union{Symbol,Nothing} = nothing,
@@ -65,15 +71,22 @@ function Rotavirus(;
     beta_peryear = Float64(beta) * 365.25
     inf = Starsim.InfectionData(nm; init_prev=Float64(init_prev), beta=beta_peryear, label="Rotavirus G$(G)P$(P)")
 
+    # Pre-compute lognormal parameters to match Python ss.lognorm_ex(mean, std)
+    mu = Float64(dur_inf_mean)
+    sig = Float64(dur_inf_std)
+    logmu  = log(mu^2 / sqrt(sig^2 + mu^2))
+    logsig = sqrt(log(1.0 + sig^2 / mu^2))
+
     Rotavirus(
         inf, G, P,
         Starsim.BoolState(:recovered; default=false, label="Recovered"),
         Starsim.FloatState(:ti_recovered; default=Inf, label="Time recovered"),
         Starsim.FloatState(:waning_rate; default=0.0, label="Waning rate"),
         Starsim.FloatState(:n_infections; default=0.0, label="Infection count"),
-        Float64(dur_inf_mean),
+        mu, sig,
         Float64(waning_rate_mean),
         Float64(waning_rate_std),
+        logmu, logsig,
         nothing,  # immunity_connector — set during init_pre!
         StableRNG(0),
     )
@@ -84,6 +97,11 @@ Starsim.module_data(d::Rotavirus)  = d.infection.dd.mod
 
 """Return (G, P) strain tuple."""
 strain(d::Rotavirus) = (d.G, d.P)
+
+"""Sample infection duration (days) from lognormal matching Python ss.lognorm_ex."""
+function _sample_dur_inf(d::Rotavirus)
+    return max(1.0, exp(d.dur_inf_logmu + randn(d.rng) * d.dur_inf_logsig))
+end
 
 # ============================================================================
 # Lifecycle
@@ -167,7 +185,7 @@ function Starsim.init_post!(d::Rotavirus, sim)
     # Set recovery time (in timestep units)
     dt_days = sim.pars.dt * 365.25
     for u in infect_uids.values
-        dur_days = max(1.0, d.dur_inf_mean + randn(d.rng) * d.dur_inf_mean * 0.3)
+        dur_days = _sample_dur_inf(d)
         dur_ts = dur_days / dt_days
         d.ti_recovered.raw[u] = 1.0 + dur_ts
     end
@@ -267,7 +285,6 @@ function _infect_rota!(d::Rotavirus, sim)
 end
 
 function _infect_rota_standard!(d::Rotavirus, sim, edges::Starsim.Edges, beta_dt::Float64, ti::Int, net)
-    new_infections = 0
     n_edges = length(edges)
     bidir = Starsim.network_data(net).bidirectional
 
@@ -280,6 +297,10 @@ function _infect_rota_standard!(d::Rotavirus, sim, edges::Starsim.Edges, beta_dt
     rel_sus_raw     = d.infection.rel_sus.raw
     rng = d.rng
 
+    # Phase 1: collect transmission targets (matching Python's batched approach)
+    new_targets = Int[]
+    new_sources = Int[]
+
     @inbounds for i in 1:n_edges
         src = p1[i]
         trg = p2[i]
@@ -288,17 +309,29 @@ function _infect_rota_standard!(d::Rotavirus, sim, edges::Starsim.Edges, beta_dt
         if infected_raw[src] && susceptible_raw[trg]
             p = rel_trans_raw[src] * rel_sus_raw[trg] * beta_dt * edge_beta
             if rand(rng) < p
-                _do_rota_infection!(d, sim, trg, src, ti)
-                new_infections += 1
+                push!(new_targets, trg)
+                push!(new_sources, src)
             end
         end
 
         if bidir && infected_raw[trg] && susceptible_raw[src]
             p = rel_trans_raw[trg] * rel_sus_raw[src] * beta_dt * edge_beta
             if rand(rng) < p
-                _do_rota_infection!(d, sim, src, trg, ti)
-                new_infections += 1
+                push!(new_targets, src)
+                push!(new_sources, trg)
             end
+        end
+    end
+
+    # Phase 2: deduplicate and apply infections (matches Python ss.uids.unique)
+    new_infections = 0
+    seen = Set{Int}()
+    for k in eachindex(new_targets)
+        t = new_targets[k]
+        if !(t in seen) && susceptible_raw[t]
+            push!(seen, t)
+            _do_rota_infection!(d, sim, t, new_sources[k], ti)
+            new_infections += 1
         end
     end
     return new_infections
@@ -311,7 +344,7 @@ function _do_rota_infection!(d::Rotavirus, sim, target::Int, source::Int, ti::In
 
     # Sample infection duration and set recovery time
     dt_days = sim.pars.dt * 365.25
-    dur_days = max(1.0, d.dur_inf_mean + randn(d.rng) * d.dur_inf_mean * 0.3)
+    dur_days = _sample_dur_inf(d)
     dur_ts = dur_days / dt_days
     d.ti_recovered.raw[target] = Float64(ti) + dur_ts
 
