@@ -1,0 +1,129 @@
+---
+title: "Contact Networks (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This is the Python companion to the Julia `05_networks` vignette,
+exploring contact network types and their effect on epidemic dynamics.
+
+## RandomNet
+
+```{python}
+import starsim as ss
+import numpy as np
+import pylab as pl
+
+sim_random = ss.Sim(
+    n_agents=2_000,
+    networks=ss.RandomNet(n_contacts=10),
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+)
+sim_random.run()
+
+prev_random = sim_random.results.sir.prevalence.values
+print(f"RandomNet peak prevalence: {max(prev_random):.4f}")
+```
+
+## MixingPool: frequency-dependent mixing
+
+```{python}
+sim_pool = ss.Sim(
+    n_agents=2_000,
+    networks=ss.MixingPool(n_contacts=10),
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+)
+sim_pool.run()
+
+prev_pool = sim_pool.results.sir.prevalence.values
+print(f"MixingPool peak prevalence: {max(prev_pool):.4f}")
+```
+
+## MFNet: male–female partnerships
+
+```{python}
+sim_mf = ss.Sim(
+    n_agents=2_000,
+    networks=ss.MFNet(duration=200, participation=ss.bernoulli(p=0.8)),
+    diseases=ss.SIR(beta=0.3, dur_inf=20, init_prev=0.05),
+    dt=1.0, start=0, stop=365*5, rand_seed=42, verbose=0,
+)
+sim_mf.run()
+
+prev_mf = sim_mf.results.sir.prevalence.values
+print(f"MFNet peak prevalence: {max(prev_mf):.4f}")
+```
+
+## Comparing network types
+
+```{python}
+pl.figure(figsize=(10, 6))
+pl.plot(range(len(prev_random)), prev_random, label="RandomNet", lw=2, color="blue")
+pl.plot(range(len(prev_pool)),   prev_pool,   label="MixingPool", lw=2, color="green")
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("SIR Prevalence by Network Type")
+pl.legend()
+pl.show()
+```
+
+## Multiple networks
+
+```{python}
+sim_layers = ss.Sim(
+    n_agents=3_000,
+    networks=[
+        ss.RandomNet(name='household', n_contacts=4),
+        ss.RandomNet(name='workplace', n_contacts=8),
+    ],
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+)
+sim_layers.run()
+
+prev_layers = sim_layers.results.sir.prevalence.values
+
+pl.figure(figsize=(10, 6))
+pl.plot(range(len(prev_random)), prev_random, label="Single net (10 contacts)", lw=2, color="blue", ls="--")
+pl.plot(range(len(prev_layers)), prev_layers, label="Two layers (4+8 contacts)", lw=2, color="red")
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("Single vs Layered Networks")
+pl.legend()
+pl.show()
+```
+
+## Effect of contact number
+
+```{python}
+contacts = [4, 10, 20]
+
+pl.figure(figsize=(10, 6))
+for nc in contacts:
+    sim = ss.Sim(
+        n_agents=2_000, networks=ss.RandomNet(n_contacts=nc),
+        diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+        dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    )
+    sim.run()
+    prev = sim.results.sir.prevalence.values
+    pl.plot(range(len(prev)), prev, label=f"n_contacts={nc}", lw=2)
+
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("Effect of Contact Number")
+pl.legend()
+pl.show()
+```

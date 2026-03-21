@@ -1,0 +1,107 @@
+---
+title: "Introduction to Starsim.jl"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: julia
+---
+
+## Overview
+
+**Starsim.jl** is a Julia port of the [Starsim](https://starsim.org) agent-based modeling framework for simulating disease transmission. It provides a modular architecture where diseases, contact networks, demographics, interventions, and analyzers are independent components that can be composed into complex simulations.
+
+Key features:
+
+- **Agent-based**: Each individual is tracked with unique states
+- **Modular**: Mix and match diseases, networks, demographics, and interventions
+- **Fast**: Native Julia compilation (no separate Numba step)
+- **CRN-safe**: Common Random Numbers support for robust scenario comparison
+- **GPU-ready**: Parametric array types allow Metal.jl/CUDA.jl backends
+
+## Quick start
+
+The simplest way to run a simulation is the `demo()` function, which sets up an SIR model on a random contact network.
+
+```{julia}
+using Starsim
+
+sim = demo(n_agents=1000, verbose=0)
+```
+
+## Building a basic SIR model
+
+Let's build the same simulation explicitly to understand the components.
+
+```{julia}
+sim = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=10),
+    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,       # 1 day timestep
+    stop = 200.0,    # simulate for 200 days
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim)
+```
+
+### Understanding the parameters
+
+- `n_agents = 1000`: Simulate 1,000 individuals
+- `RandomNet(n_contacts=10)`: Each agent has ~10 contacts per day (bidirectional, so 5 edges created per agent)
+- `SIR(beta=0.05, dur_inf=4.0, init_prev=0.01)`: SIR disease with per-day transmission rate 0.05, mean infectious period of 4 days, and 1% initial prevalence
+- `dt = 1.0`: Time is measured in days
+- `stop = 200.0`: Run for 200 days
+
+## Accessing results
+
+Results are stored per-module. Access them by disease name and result name:
+
+```{julia}
+n_sus = get_result(sim, :sir, :n_susceptible)
+n_inf = get_result(sim, :sir, :n_infected)
+n_rec = get_result(sim, :sir, :n_recovered)
+prev = get_result(sim, :sir, :prevalence)
+
+println("Peak prevalence: $(round(maximum(prev), digits=4))")
+println("Final susceptible: $(Int(n_sus[end]))")
+println("Final recovered: $(Int(n_rec[end]))")
+```
+
+## Exporting to DataFrame
+
+Convert all results to a tidy DataFrame for further analysis:
+
+```{julia}
+using DataFrames
+
+df = to_dataframe(sim)
+println("Columns: ", names(df))
+println("Rows: ", nrow(df))
+first(df, 5)
+```
+
+## Plotting the epidemic curve
+
+```{julia}
+using Plots
+
+tvec = 0:length(n_sus)-1
+plot(tvec, n_sus, label="Susceptible", lw=2, color=:blue)
+plot!(tvec, n_inf, label="Infected", lw=2, color=:red)
+plot!(tvec, n_rec, label="Recovered", lw=2, color=:green)
+xlabel!("Day")
+ylabel!("Number of agents")
+title!("SIR Epidemic Dynamics")
+```
+
+## Next steps
+
+- **Vignette 02**: Building custom models with different components
+- **Vignette 03**: Adding births and deaths with demographics
+- **Vignette 04**: Working with different disease models (SIS, SEIR)
+- **Vignette 08**: Measles outbreak modeling with SEIR

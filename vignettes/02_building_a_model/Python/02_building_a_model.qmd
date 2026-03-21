@@ -1,0 +1,58 @@
+---
+title: "Building a Model (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: python
+---
+
+## Component-based setup
+
+```{python}
+import starsim as ss
+
+net = ss.RandomNet(n_contacts=10)
+disease = ss.SIR(beta=0.1, dur_inf=4, init_prev=0.02)
+
+sim = ss.Sim(
+    n_agents=1_000,
+    networks=net,
+    diseases=disease,
+    dt=1.0,
+    start=0,
+    stop=200,
+    rand_seed=42,
+    verbose=0,
+)
+sim.run()
+```
+
+## Multiple networks
+
+```{python}
+sim_multi = ss.Sim(
+    n_agents=1_000,
+    networks=[
+        ss.RandomNet(name='household', n_contacts=4),
+        ss.RandomNet(name='workplace', n_contacts=8),
+    ],
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+)
+sim_multi.run()
+
+prev = sim_multi.results.sir.prevalence.values
+print(f"Peak prevalence with 2 networks: {max(prev):.4f}")
+```
+
+## Exporting to DataFrame
+
+```{python}
+df = sim.to_df()
+print(f"Columns: {list(df.columns)[:10]}...")
+df.head()
+```

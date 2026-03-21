@@ -1,0 +1,79 @@
+---
+title: "Introduction to Starsim (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This is the Python companion to the Julia `01_introduction` vignette,
+using the [Starsim](https://starsim.org) framework.
+
+## Quick start
+
+```{python}
+import starsim as ss
+
+sim = ss.demo(n_agents=1000)
+```
+
+## Building a basic SIR model
+
+```{python}
+sim = ss.Sim(
+    n_agents=1_000,
+    networks=ss.RandomNet(n_contacts=10),
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0,
+    start=0,
+    stop=200,
+    rand_seed=42,
+    verbose=0,
+)
+sim.run()
+```
+
+## Accessing results
+
+```{python}
+n_sus = sim.results.sir.n_susceptible.values
+n_inf = sim.results.sir.n_infected.values
+n_rec = sim.results.sir.n_recovered.values
+prev = sim.results.sir.prevalence.values
+
+print(f"Peak prevalence: {max(prev):.4f}")
+print(f"Final susceptible: {int(n_sus[-1])}")
+print(f"Final recovered: {int(n_rec[-1])}")
+```
+
+## Exporting to DataFrame
+
+```{python}
+df = sim.to_df()
+print(f"Columns: {list(df.columns)[:10]}...")
+print(f"Rows: {len(df)}")
+df.head()
+```
+
+## Plotting the epidemic curve
+
+```{python}
+import pylab as pl
+
+tvec = range(len(n_sus))
+pl.figure(figsize=(10, 6))
+pl.plot(tvec, n_sus, label="Susceptible", lw=2, color="blue")
+pl.plot(tvec, n_inf, label="Infected", lw=2, color="red")
+pl.plot(tvec, n_rec, label="Recovered", lw=2, color="green")
+pl.xlabel("Day")
+pl.ylabel("Number of agents")
+pl.title("SIR Epidemic Dynamics")
+pl.legend()
+pl.show()
+```

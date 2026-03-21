@@ -1,0 +1,82 @@
+---
+title: "MultiSim: Parallel Runs and Uncertainty (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This is the Python companion to the Julia `12_multisim` vignette. We run
+multiple stochastic replications of an SIR simulation and aggregate results.
+
+## Basic MultiSim
+
+```{python}
+import starsim as ss
+import numpy as np
+import pylab as pl
+
+sim = ss.Sim(
+    n_agents=1000,
+    networks=ss.RandomNet(n_contacts=10),
+    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    dt=1.0,
+    start=0,
+    stop=200,
+    rand_seed=42,
+    verbose=0,
+)
+
+msim = ss.MultiSim(sim, n_runs=10)
+msim.run(verbose=0)
+```
+
+## Reduced results
+
+```{python}
+msim.reduce()
+
+# After reduce, results are flattened: sir_prevalence, etc.
+import pylab as pl
+
+prev = msim.results.sir_prevalence
+tvec = np.arange(len(prev.values))
+
+pl.figure(figsize=(10, 5))
+pl.fill_between(tvec, prev.low, prev.high,
+                alpha=0.3, color='red', label='10th–90th percentile')
+pl.plot(tvec, prev.values, color='darkred', lw=2, label='Median')
+pl.xlabel('Day')
+pl.ylabel('Prevalence')
+pl.title('SIR Prevalence — MultiSim (10 runs)')
+pl.legend()
+pl.show()
+```
+
+## Mean-based reduction
+
+```{python}
+msim.mean()
+
+prev = msim.results.sir_prevalence
+tvec = np.arange(len(prev.values))
+
+pl.figure(figsize=(10, 5))
+pl.fill_between(tvec, prev.low, prev.high,
+                alpha=0.3, color='blue', label='Mean ± 2σ')
+pl.plot(tvec, prev.values, color='darkblue', lw=2, label='Mean')
+pl.xlabel('Day')
+pl.ylabel('Prevalence')
+pl.title('SIR Prevalence — Mean ± 2σ')
+pl.legend()
+pl.show()
+
+peak_prev = max(prev.values)
+print(f"Mean peak prevalence: {peak_prev:.4f}")
+```

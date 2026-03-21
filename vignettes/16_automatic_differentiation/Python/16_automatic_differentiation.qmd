@@ -1,0 +1,131 @@
+---
+title: "Automatic Differentiation for Sensitivity Analysis (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This Python companion demonstrates parameter sensitivity analysis using
+finite differences with starsim. While Python lacks Julia's AD ecosystem,
+the same central finite difference approach with common random numbers
+produces equivalent results.
+
+## Setup
+
+```{python}
+import starsim as ss
+import numpy as np
+import matplotlib.pyplot as plt
+```
+
+## Basic sensitivity analysis
+
+```{python}
+def run_sir_with_beta(beta, seed=42, n_agents=1000):
+    """Run SIR simulation with given beta and return results."""
+    sim = ss.Sim(
+        n_agents=n_agents,
+        diseases=dict(type='sir', init_prev=0.01, beta=beta, dur_inf=4.0),
+        networks=dict(type='random', n_contacts=10),
+        start=0, stop=200, dt=1.0,
+        rand_seed=seed,
+    )
+    sim.run(verbose=0)
+    return sim.results.sir.prevalence.values
+
+
+def sensitivity_fd(beta0, h=1e-3, seed=42, n_agents=1000, summary=np.max):
+    """Central finite difference sensitivity."""
+    prev_plus = run_sir_with_beta(beta0 + h, seed=seed, n_agents=n_agents)
+    prev_minus = run_sir_with_beta(beta0 - h, seed=seed, n_agents=n_agents)
+    return (summary(prev_plus) - summary(prev_minus)) / (2 * h)
+
+
+dsdb = sensitivity_fd(0.05)
+print(f"∂(max prevalence)/∂(beta) = {dsdb:.2f}")
+```
+
+## Sensitivity timeseries
+
+```{python}
+h = 1e-3
+prev_plus = run_sir_with_beta(0.05 + h)
+prev_minus = run_sir_with_beta(0.05 - h)
+ts = (prev_plus - prev_minus) / (2 * h)
+
+prev = run_sir_with_beta(0.05)
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5), sharex=True)
+ax1.plot(prev, label='Prevalence', linewidth=2)
+ax1.set_ylabel('Prevalence')
+ax1.legend()
+
+ax2.plot(ts, label='∂prev/∂beta', linewidth=2, color='red')
+ax2.set_ylabel('Sensitivity')
+ax2.set_xlabel('Time step')
+ax2.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Parameter sweep
+
+```{python}
+betas = np.arange(0.01, 0.16, 0.01)
+max_prevs = []
+sensitivities = []
+
+for b in betas:
+    prev = run_sir_with_beta(b)
+    max_prevs.append(np.max(prev))
+    ds = sensitivity_fd(b)
+    sensitivities.append(ds)
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5))
+ax1.plot(betas, max_prevs, 'o-', label='Max prevalence', linewidth=2)
+ax1.set_xlabel('beta')
+ax1.set_ylabel('Max prevalence')
+ax1.legend()
+
+ax2.plot(betas, sensitivities, 'o-', label='∂(max prev)/∂(beta)', linewidth=2, color='red')
+ax2.set_xlabel('beta')
+ax2.set_ylabel('Sensitivity')
+ax2.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Calibration with gradient
+
+```{python}
+# Target
+target_sim = ss.Sim(
+    n_agents=1000,
+    diseases=dict(type='sir', init_prev=0.01, beta=0.08, dur_inf=4.0),
+    networks=dict(type='random', n_contacts=10),
+    start=0, stop=200, dt=1.0,
+    rand_seed=1,
+)
+target_sim.run(verbose=0)
+target_prev = np.max(target_sim.results.sir.prevalence.values)
+print(f"Target max prevalence: {target_prev:.4f}")
+
+# Gradient at initial point
+def calib_objective(beta):
+    prev = run_sir_with_beta(beta)
+    return (np.max(prev) - target_prev) ** 2
+
+h = 1e-3
+x0 = 0.05
+obj = calib_objective(x0)
+grad = (calib_objective(x0 + h) - calib_objective(x0 - h)) / (2 * h)
+print(f"Objective at beta=0.05: {obj:.6f}")
+print(f"Gradient: {grad:.4f}")
+```
