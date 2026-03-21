@@ -285,6 +285,7 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
     p1 = edges.p1
     p2 = edges.p2
     eb = edges.beta
+    ea = edges.acts
     infected_raw    = d.infection.infected.raw
     exposed_raw     = d.exposed.raw
     susceptible_raw = d.infection.susceptible.raw
@@ -303,12 +304,15 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
         src = p1[i]
         trg = p2[i]
         edge_beta = eb[i]
+        acts = ea[i]
 
         # src → trg
         if (infected_raw[src] || exposed_raw[src]) && susceptible_raw[trg] && !exposed_raw[trg]
             if infected_raw[src]  # Only infectious (not exposed) can transmit
                 beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
-                p = rel_trans_raw[src] * rel_sus_raw[trg] * (1.0 - exp(-beta_act * dt)) * edge_beta
+                beta_per_act = 1.0 - exp(-beta_act * dt)
+                eff_beta = clamp(beta_per_act * rel_trans_raw[src] * rel_sus_raw[trg], 0.0, 1.0)
+                p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, trg, src, ti)
                     new_infections += 1
@@ -320,7 +324,9 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
         if bidir && (infected_raw[trg] || exposed_raw[trg]) && susceptible_raw[src] && !exposed_raw[src]
             if infected_raw[trg]
                 beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
-                p = rel_trans_raw[trg] * rel_sus_raw[src] * (1.0 - exp(-beta_act * dt)) * edge_beta
+                beta_per_act = 1.0 - exp(-beta_act * dt)
+                eff_beta = clamp(beta_per_act * rel_trans_raw[trg] * rel_sus_raw[src], 0.0, 1.0)
+                p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, src, trg, ti)
                     new_infections += 1

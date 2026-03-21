@@ -42,29 +42,35 @@ mutable struct Syphilis <: Starsim.AbstractInfection
     dur_secondary::Float64
     dur_early_latent::Float64
     dur_late_latent::Float64
-    p_reactivate::Float64      # prob of reactivation from early latent
-    p_tertiary::Float64        # prob of progressing to tertiary from late latent
+    p_reactivate::Float64
+    p_tertiary::Float64
     rel_trans_primary::Float64
     rel_trans_secondary::Float64
+    rel_trans_latent::Float64          # Baseline latent transmissibility (Python default 1.0)
+    rel_trans_latent_half_life::Float64 # Half-life of latent transmissibility decay (years)
+    rel_trans_tertiary::Float64
 
     rng::StableRNG
 end
 
 function Syphilis(;
     name::Symbol              = :syphilis,
-    init_prev::Real           = 0.02,
-    beta_m2f::Real            = 0.3,
+    init_prev::Real           = 0.0,       # Python default: ss.bernoulli(p=0)
+    beta_m2f::Real            = 0.1,       # Python default: 0.1
     rel_beta_f2m::Real        = 0.5,
-    beta_m2m::Real            = 0.3,
-    eff_condom::Real          = 0.7,
+    beta_m2m::Real            = 0.1,
+    eff_condom::Real          = 0.0,       # Python default: 0.0
     dur_primary::Real         = 45/365,    # ~45 days
     dur_secondary::Real       = 120/365,   # ~4 months
-    dur_early_latent::Real    = 1.0,       # ~1 year
-    dur_late_latent::Real     = 10.0,      # ~10 years
-    p_reactivate::Real        = 0.25,
-    p_tertiary::Real          = 0.3,
-    rel_trans_primary::Real   = 2.0,
-    rel_trans_secondary::Real = 1.5,
+    dur_early_latent::Real    = 1.0,       # ~1 year (matches Python dur_early ≈ 12-14 months)
+    dur_late_latent::Real     = 19.0,      # Python: time_to_tertiary ~ Normal(20yr, 2yr) from latent onset
+    p_reactivate::Real        = 0.35,      # Python default: 0.35
+    p_tertiary::Real          = 0.35,      # Python default: 0.35
+    rel_trans_primary::Real   = 1.0,       # Python default: 1.0
+    rel_trans_secondary::Real = 1.0,       # Python default: 1.0
+    rel_trans_latent::Real    = 1.0,       # Python default: 1.0 (decays exponentially)
+    rel_trans_latent_half_life::Real = 1.0, # Python default: 1 year
+    rel_trans_tertiary::Real  = 0.0,       # Python default: 0.0
 )
     inf = Starsim.InfectionData(name; init_prev=Float64(init_prev), beta=Float64(beta_m2f), label="Syphilis")
 
@@ -87,6 +93,8 @@ function Syphilis(;
         Float64(dur_early_latent), Float64(dur_late_latent),
         Float64(p_reactivate), Float64(p_tertiary),
         Float64(rel_trans_primary), Float64(rel_trans_secondary),
+        Float64(rel_trans_latent), Float64(rel_trans_latent_half_life),
+        Float64(rel_trans_tertiary),
         StableRNG(0),
     )
 end
@@ -186,13 +194,13 @@ function Starsim.step_state!(d::Syphilis, sim)
         if d.secondary.raw[u] && d.ti_early_latent.raw[u] <= ti_f
             d.secondary.raw[u] = false
             d.early_latent.raw[u] = true
-            d.infection.rel_trans.raw[u] = 0.1  # Low transmissibility in latent
+            # Start latent transmissibility at baseline (will decay each timestep)
+            d.infection.rel_trans.raw[u] = d.rel_trans_latent
         end
 
         # Early Latent → Late Latent or reactivation
         if d.early_latent.raw[u] && d.ti_late_latent.raw[u] <= ti_f
             if rand(d.rng) < d.p_reactivate
-                # Reactivate to secondary
                 d.early_latent.raw[u] = false
                 d.secondary.raw[u] = true
                 d.infection.rel_trans.raw[u] = d.rel_trans_secondary
@@ -203,15 +211,28 @@ function Starsim.step_state!(d::Syphilis, sim)
             else
                 d.early_latent.raw[u] = false
                 d.late_latent.raw[u] = true
-                d.infection.rel_trans.raw[u] = 0.0  # Not transmissible in late latent
             end
         end
 
-        # Late Latent → Tertiary (small probability)
+        # Exponential decay of latent transmissibility (matching Python)
+        if d.early_latent.raw[u] || d.late_latent.raw[u]
+            dur_latent_years = (ti_f - d.ti_early_latent.raw[u]) * dt
+            if d.rel_trans_latent_half_life > 0.0
+                decay_rate = log(2.0) / d.rel_trans_latent_half_life
+                d.infection.rel_trans.raw[u] = d.rel_trans_latent * exp(-decay_rate * dur_latent_years)
+            else
+                d.infection.rel_trans.raw[u] = d.rel_trans_latent
+            end
+        end
+
+        # Late Latent → Tertiary (one-time check, matching Python)
         if d.late_latent.raw[u] && d.ti_tertiary.raw[u] <= ti_f
             if rand(d.rng) < d.p_tertiary
                 d.late_latent.raw[u] = false
                 d.tertiary.raw[u] = true
+                d.infection.rel_trans.raw[u] = d.rel_trans_tertiary
+            else
+                d.ti_tertiary.raw[u] = Inf  # Failed check; stay in late latent permanently
             end
         end
     end
@@ -246,7 +267,7 @@ end
 function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Float64, ti::Int, net)
     new_infections = 0
     bidir = Starsim.network_data(net).bidirectional
-    p1 = edges.p1; p2 = edges.p2; eb = edges.beta
+    p1 = edges.p1; p2 = edges.p2; eb = edges.beta; ea = edges.acts
     inf_raw = d.infection.infected.raw
     sus_raw = d.infection.susceptible.raw
     rt_raw  = d.infection.rel_trans.raw
@@ -256,10 +277,12 @@ function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Fl
     dt = sim.pars.dt
 
     @inbounds for i in 1:length(edges)
-        src = p1[i]; trg = p2[i]; edge_beta = eb[i]
+        src = p1[i]; trg = p2[i]; edge_beta = eb[i]; acts = ea[i]
         if inf_raw[src] && sus_raw[trg]
             ba = _get_directional_beta(female_raw[src], female_raw[trg], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
-            p = rt_raw[src] * rs_raw[trg] * (1.0 - exp(-ba * dt)) * edge_beta
+            beta_per_act = 1.0 - exp(-ba * dt)
+            eff_beta = clamp(beta_per_act * rt_raw[src] * rs_raw[trg], 0.0, 1.0)
+            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
             if rand(rng) < p
                 _do_syph_infection!(d, sim, trg, src, ti)
                 new_infections += 1
@@ -267,7 +290,9 @@ function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Fl
         end
         if bidir && inf_raw[trg] && sus_raw[src]
             ba = _get_directional_beta(female_raw[trg], female_raw[src], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
-            p = rt_raw[trg] * rs_raw[src] * (1.0 - exp(-ba * dt)) * edge_beta
+            beta_per_act = 1.0 - exp(-ba * dt)
+            eff_beta = clamp(beta_per_act * rt_raw[trg] * rs_raw[src], 0.0, 1.0)
+            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
             if rand(rng) < p
                 _do_syph_infection!(d, sim, src, trg, ti)
                 new_infections += 1
@@ -298,7 +323,8 @@ function _do_syph_infection!(d::Syphilis, sim, target::Int, source::Int, ti::Int
     dur_el_ts = max(1.0, d.dur_early_latent / dt + randn(d.rng) * d.dur_early_latent * 0.3 / dt)
     d.ti_late_latent.raw[target] = d.ti_early_latent.raw[target] + dur_el_ts
 
-    dur_ll_ts = max(1.0, d.dur_late_latent / dt + randn(d.rng) * d.dur_late_latent * 0.3 / dt)
+    # Python: time_to_tertiary ~ Normal(20yr, 2yr) → relative SD = 0.1
+    dur_ll_ts = max(1.0, d.dur_late_latent / dt + randn(d.rng) * d.dur_late_latent * 0.1 / dt)
     d.ti_tertiary.raw[target] = d.ti_late_latent.raw[target] + dur_ll_ts
 
     push!(d.infection.infection_sources, (target, source, ti))

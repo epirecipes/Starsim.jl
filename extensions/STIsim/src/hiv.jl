@@ -274,7 +274,33 @@ function Starsim.step_state!(d::HIV, sim)
             d.cd4_nadir.raw[u] = d.cd4.raw[u]
         end
 
-        # AIDS death
+        # CD4-based mortality (matching Python's make_p_hiv_death)
+        if !on_art_raw[u] && sim.people.alive.raw[u]
+            cd4_val = d.cd4.raw[u]
+            # CD4 bins: [≥1000, 500-999, 350-499, 200-349, 50-199, <50]
+            # Annual rates: [0.003, 0.003, 0.005, 0.01, 0.05, 0.300]
+            annual_rate = if cd4_val >= 1000.0
+                0.003
+            elseif cd4_val >= 500.0
+                0.003
+            elseif cd4_val >= 350.0
+                0.005
+            elseif cd4_val >= 200.0
+                0.01
+            elseif cd4_val >= 50.0
+                0.05
+            else
+                0.300
+            end
+            p_death = 1.0 - exp(-annual_rate * dt)
+            if rand(d.rng) < p_death
+                Starsim.request_death!(sim.people, Starsim.UIDs([u]), ti)
+                new_deaths += 1
+                continue
+            end
+        end
+
+        # AIDS death (CD4 reaches zero)
         if d.include_aids_deaths && !on_art_raw[u] && d.ti_dead.raw[u] <= ti_f
             Starsim.request_death!(sim.people, Starsim.UIDs([u]), ti)
             new_deaths += 1
@@ -359,6 +385,7 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
     p1 = edges.p1
     p2 = edges.p2
     eb = edges.beta
+    ea = edges.acts
     infected_raw    = d.infection.infected.raw
     susceptible_raw = d.infection.susceptible.raw
     rel_trans_raw   = d.infection.rel_trans.raw
@@ -377,11 +404,15 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
         src = p1[i]
         trg = p2[i]
         edge_beta = eb[i]
+        acts = ea[i]
 
         if infected_raw[src] && susceptible_raw[trg]
             beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[src] ? (1.0 - art_eff) : 1.0
-            p = rel_trans_raw[src] * trans_mult * rel_sus_raw[trg] * (1.0 - exp(-beta_act * dt)) * edge_beta
+            # Per-act probability, then compound over acts (matching Python net_beta)
+            beta_per_act = 1.0 - exp(-beta_act * dt)
+            eff_beta = clamp(beta_per_act * rel_trans_raw[src] * trans_mult * rel_sus_raw[trg], 0.0, 1.0)
+            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, trg, src, ti)
                 new_infections += 1
@@ -391,7 +422,9 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
         if bidir && infected_raw[trg] && susceptible_raw[src]
             beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[trg] ? (1.0 - art_eff) : 1.0
-            p = rel_trans_raw[trg] * trans_mult * rel_sus_raw[src] * (1.0 - exp(-beta_act * dt)) * edge_beta
+            beta_per_act = 1.0 - exp(-beta_act * dt)
+            eff_beta = clamp(beta_per_act * rel_trans_raw[trg] * trans_mult * rel_sus_raw[src], 0.0, 1.0)
+            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, src, trg, ti)
                 new_infections += 1

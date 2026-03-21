@@ -55,8 +55,8 @@ using STIsim
     @testset "Syphilis construction" begin
         d = Syphilis()
         @test d isa Syphilis
-        @test Starsim.disease_data(d).init_prev > 0.0
-        @test d.beta_m2f > 0.0
+        @test Starsim.disease_data(d).init_prev == 0.0  # Python default: no initial prevalence
+        @test d.beta_m2f == 0.1  # Python default
         @test d.dur_primary > 0.0
     end
 
@@ -160,7 +160,7 @@ using STIsim
 
     @testset "STISim with multiple diseases" begin
         sim = STISim(;
-            diseases=[HIV(; init_prev=0.05), Syphilis(; init_prev=0.02)],
+            diseases=[HIV(; init_prev=0.05), Syphilis(; init_prev=0.05)],
             n_agents=500,
             start=2000.0,
             stop=2005.0,
