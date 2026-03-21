@@ -241,6 +241,8 @@ function _load_location_overrides!(pars::FPPars, loc_dir::AbstractString)
         df = CSV.read(pp_file, DataFrame)
         pars.pp_months = Int.(df.month)
         pars.pp_percent_active = Float64.(df.probs)
+        # Duration of postpartum matches Python: length of PP activity data (months)
+        pars.dur_postpartum = length(pars.pp_months) - 1  # 0-indexed months, so 24 entries → 23 months
     end
 
     # Birth spacing preferences
@@ -249,6 +251,11 @@ function _load_location_overrides!(pars::FPPars, loc_dir::AbstractString)
         df = CSV.read(sp_file, DataFrame)
         pars.spacing_months = Float64.(df.month)
         pars.spacing_weights = Float64.(df.weights)
+        # Derive spacing parameters matching Python
+        if length(pars.spacing_months) >= 2
+            pars.spacing_interval = pars.spacing_months[2] - pars.spacing_months[1]
+        end
+        pars.spacing_n_bins = length(pars.spacing_weights) - 1
     end
 
     # Background mortality by age/sex
@@ -267,6 +274,23 @@ function _load_location_overrides!(pars::FPPars, loc_dir::AbstractString)
         pars.age_pyramid_ages = Float64.(df.age)
         pars.age_pyramid_male = Float64.(df.male)
         pars.age_pyramid_female = Float64.(df.female)
+    end
+
+    # Calibration parameters (exposure_age, exposure_parity overrides)
+    calib_file = joinpath(loc_dir, "calib_pars.csv")
+    if isfile(calib_file)
+        df = CSV.read(calib_file, DataFrame)
+        for row in eachrow(df)
+            ages = Float64.(parse.(Float64, split(string(row.ages), ";")))
+            vals = Float64.(parse.(Float64, split(string(row.vals), ";")))
+            if row.param == "exposure_age"
+                pars.exposure_age_ages = ages
+                pars.exposure_age_vals = vals
+            elseif row.param == "exposure_parity"
+                pars.exposure_parity_parities = ages
+                pars.exposure_parity_vals = vals
+            end
+        end
     end
 
     # Fill defaults for empty arrays

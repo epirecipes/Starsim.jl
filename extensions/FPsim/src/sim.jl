@@ -30,6 +30,7 @@ function FPSim(;
     pars::Union{FPPars, Nothing} = nothing,
     use_contraception::Bool = false,
     initiation_rate::Float64 = 0.10,
+    initial_cpr::Float64 = -1.0,  # -1 = auto-detect from location data
     analyzers = nothing,
     kwargs...,
 )
@@ -45,10 +46,33 @@ function FPSim(;
     interventions = Starsim.AbstractIntervention[]
     if use_contraception
         mm = load_method_mix(; location=location, methods=methods)
+        # Auto-detect initial CPR from location data
+        cpr_val = initial_cpr
+        if cpr_val < 0
+            cpr_val = _load_initial_cpr(location)
+        end
+        # Derive initiation rate to sustain the target CPR at equilibrium
+        # Equilibrium: init_rate * (1 - CPR) = avg_disc_rate * CPR
+        # => init_rate = avg_disc_rate * CPR / (1 - CPR)
+        avg_disc = 0.0
+        n_active = 0
+        for (i, name) in enumerate(mm.method_names)
+            idx = findfirst(m -> m.name == name, methods)
+            if idx !== nothing
+                avg_disc += mm.mix_probs[i] * methods[idx].discontinuation
+                n_active += 1
+            end
+        end
+        target_init = if cpr_val > 0 && cpr_val < 1 && avg_disc > 0
+            avg_disc * cpr_val / (1 - cpr_val)
+        else
+            initiation_rate
+        end
         push!(interventions, Contraception(;
             methods=methods,
             method_mix=mm,
-            initiation_rate=initiation_rate,
+            initiation_rate=target_init,
+            initial_cpr=cpr_val,
         ))
     end
 
@@ -65,4 +89,20 @@ function FPSim(;
     )
 
     return sim
+end
+
+"""Load initial CPR from location use.csv data."""
+function _load_initial_cpr(location::Symbol)
+    loc_dir = joinpath(DATA_DIR, string(location))
+    use_file = joinpath(loc_dir, "use.csv")
+    if isfile(use_file)
+        df = CSV.read(use_file, DataFrame)
+        # "use" column: 0=not using, 1=using; "perc" column has percentage
+        for row in eachrow(df)
+            if string(row.use) == "1"
+                return Float64(row.perc) / 100.0
+            end
+        end
+    end
+    return 0.25  # default
 end

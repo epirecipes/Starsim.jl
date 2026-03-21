@@ -236,21 +236,21 @@ function Starsim.step!(c::FPmod, sim)
             continue  # not yet active, nothing to do
         end
 
-        # Update sexual activity for non-pregnant, non-postpartum women
-        if !c.pregnant.raw[u] && !c.postpartum.raw[u] && !c.sexually_active.raw[u]
+        # Update sexual activity for non-pregnant, non-postpartum, debuted women
+        # Python re-evaluates each timestep: women can toggle active↔inactive
+        if !c.pregnant.raw[u] && !c.postpartum.raw[u] && c.sexual_debut.raw[u]
             sa = age_lookup(pars.sexual_activity, age, 0.0)
-            if rand(c.rng) < sa * dt
-                c.sexually_active.raw[u] = true
-            end
+            c.sexually_active.raw[u] = rand(c.rng) < sa
         end
 
         # ---- 2. Handle ongoing pregnancy ----
         if c.pregnant.raw[u]
             c.gestation_month.raw[u] += dt_months
 
-            # First trimester miscarriage check
+            # First trimester miscarriage check — fires once when gest crosses end_first_tri
             gest = c.gestation_month.raw[u]
-            if gest >= pars.end_first_tri && gest < pars.end_first_tri + dt_months + 0.5
+            prev_gest = gest - dt_months
+            if prev_gest < pars.end_first_tri && gest >= pars.end_first_tri
                 mis_rate = age_lookup(pars.miscarriage_rates, age, 0.12)
                 if rand(c.rng) < mis_rate
                     n_miscarriages += 1
@@ -335,8 +335,9 @@ function Starsim.step!(c::FPmod, sim)
                 c.lam.raw[u] = false
             end
 
-            # Postpartum sexual activity
-            if !c.sexually_active.raw[u]
+            # Postpartum sexual activity (matches Python spacing_pref logic)
+            # Postpartum sexual activity — re-evaluated each step (matches Python)
+            begin
                 mo = Int(floor(c.months_postpartum.raw[u]))
                 if !isempty(pars.pp_percent_active)
                     pp_idx = min(mo + 1, length(pars.pp_percent_active))
@@ -344,9 +345,14 @@ function Starsim.step!(c::FPmod, sim)
                 else
                     pp_sa = mo >= 6 ? 0.7 : 0.3
                 end
-                if rand(c.rng) < pp_sa * dt
-                    c.sexually_active.raw[u] = true
+                # Apply spacing preference if available (matches Python)
+                if !isempty(pars.spacing_weights) && pars.spacing_interval > 0
+                    sp_bin = min(Int(floor(c.months_postpartum.raw[u] / pars.spacing_interval)),
+                                pars.spacing_n_bins)
+                    sp_idx = min(sp_bin + 1, length(pars.spacing_weights))
+                    pp_sa *= pars.spacing_weights[sp_idx]
                 end
+                c.sexually_active.raw[u] = rand(c.rng) < pp_sa
             end
 
             # End postpartum period
@@ -391,8 +397,11 @@ function Starsim.step!(c::FPmod, sim)
                 rel_sus *= (1.0 - pars.LAM_efficacy)
             end
 
-            p_conceive = fecundity * exposure * rel_sus * dt
-            p_conceive = clamp(p_conceive, 0.0, 1.0)
+            # Build annual probability, then convert to per-timestep
+            # Matches Python: probperyear(raw_probs).to_prob(dt)
+            raw_prob = fecundity * exposure * rel_sus
+            raw_prob = clamp(raw_prob, 0.0, 1.0)
+            p_conceive = prob_per_timestep(raw_prob, dt)
 
             if rand(c.rng) < p_conceive
                 # Abortion check
@@ -498,7 +507,8 @@ mutable struct Contraception <: Starsim.AbstractIntervention
     iv::Starsim.InterventionData
     methods::Vector{Method}
     method_mix::MethodMix
-    initiation_rate::Float64    # Annual probability of starting contraception
+    initiation_rate::Float64    # Annual probability of starting contraception for non-users
+    initial_cpr::Float64        # Initial CPR at sim start (among eligible women)
     rng::StableRNG
 end
 
@@ -507,12 +517,13 @@ function Contraception(;
     methods::Union{Vector{Method}, Nothing} = nothing,
     method_mix::Union{MethodMix, Nothing} = nothing,
     initiation_rate::Float64 = 0.10,
+    initial_cpr::Float64 = 0.25,
 )
     md = Starsim.ModuleData(name; label="Contraception")
     iv = Starsim.InterventionData(md, nothing, :none)
     m = methods === nothing ? load_methods() : methods
     mm = method_mix === nothing ? DEFAULT_METHOD_MIX : method_mix
-    Contraception(iv, m, mm, initiation_rate, StableRNG(0))
+    Contraception(iv, m, mm, initiation_rate, initial_cpr, StableRNG(0))
 end
 
 Starsim.intervention_data(c::Contraception) = c.iv
@@ -551,8 +562,8 @@ function Starsim.init_post!(c::Contraception, sim)
         fpmod.pregnant.raw[u] && continue
         fpmod.postpartum.raw[u] && continue
 
-        # Initial uptake probability (roughly CPR level)
-        if rand(c.rng) < 0.25  # ~25% initial CPR
+        # Initial uptake probability (matches location CPR data)
+        if rand(c.rng) < c.initial_cpr
             midx = sample_method(c.rng, methods, mix)
             fpmod.on_contra.raw[u] = true
             fpmod.method_idx.raw[u] = Float64(midx)
@@ -588,7 +599,7 @@ function Starsim.step!(c::Contraception, sim)
             if midx >= 1 && midx <= length(methods)
                 disc_prob = prob_per_timestep(methods[midx].discontinuation, dt)
                 if rand(c.rng) < disc_prob
-                    # Switch or stop
+                    # Most women who discontinue switch to another method (matching Python)
                     if rand(c.rng) < mix.switch_prob
                         new_midx = sample_method(c.rng, methods, mix)
                         fpmod.method_idx.raw[u] = Float64(new_midx)
@@ -601,8 +612,14 @@ function Starsim.step!(c::Contraception, sim)
                 end
             end
         else
-            # Initiation check for non-users
-            init_prob = prob_per_timestep(c.initiation_rate, dt)
+            # Initiation check for non-users (higher rate for postpartum women)
+            base_init = prob_per_timestep(c.initiation_rate, dt)
+            # Postpartum women re-initiate faster (matching Python ti_contra mechanism)
+            init_prob = if fpmod.postpartum.raw[u] && fpmod.months_postpartum.raw[u] < 3.0
+                min(base_init * 3.0, 0.5)  # boosted initiation early postpartum
+            else
+                base_init
+            end
             if rand(c.rng) < init_prob
                 midx = sample_method(c.rng, methods, mix)
                 fpmod.on_contra.raw[u] = true

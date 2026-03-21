@@ -46,7 +46,7 @@ end
 const DEFAULT_METHOD_MIX = MethodMix(
     [:pill, :iud, :injectable, :implant, :condom, :withdrawal, :traditional],
     [0.10, 0.05, 0.35, 0.30, 0.10, 0.05, 0.05],
-    0.5,
+    0.7,
 )
 
 # ============================================================================
@@ -137,7 +137,7 @@ function load_method_mix_from_csv(path::AbstractString, methods::Vector{Method})
     end
     s = sum(probs)
     s > 0 && (probs ./= s)
-    return MethodMix(names, probs, 0.5)
+    return MethodMix(names, probs, 0.7)
 end
 
 """
