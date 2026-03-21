@@ -33,29 +33,42 @@ using Starsim, Metal
 
 sim = Sim(n_agents=100_000, diseases=SIR(beta=0.05), networks=RandomNet())
 init!(sim)
-gsim = to_gpu(sim)                     # Upload state arrays to GPU
+gsim = to_gpu(sim)
 
 for ti in 1:sim.t.npts
-    for (_, net) in sim.networks       # Network updates stay on CPU
+    # Step 5: State transitions (recovery) on GPU
+    gpu_step_state!(gsim, :sir; current_ti=ti)
+
+    # Step 7: Network rewiring on CPU
+    for (_, net) in sim.networks
         step!(net, sim)
     end
-    gpu_step!(gsim, :sir; current_ti=ti)  # Transmission + recovery on GPU
+
+    # Step 9: Transmission on GPU
+    gpu_transmit!(gsim, :sir; current_ti=ti)
 end
 
-sim = to_cpu(gsim)                     # Download results to CPU
+# Download final state
+sim = to_cpu(gsim)
 ```
 
 # Limitations
 - Infection-source logging is skipped on GPU (no dynamic allocation in kernels)
 - Disease-induced death (`p_death > 0`) is not handled in GPU kernels; use
   CPU fallback or call `to_cpu` before death processing
-- CRN (common random numbers) mode is CPU-only; GPU uses pre-generated randoms
 - Agent births/deaths between GPU steps require `sync_to_gpu!` to re-upload
 """
 module StarsimMetalExt
 
 using Starsim
 using Metal
+
+# ============================================================================
+# Constants
+# ============================================================================
+
+const METAL_THREADS = 256
+const CRN_DT_JUMP  = UInt32(1000)   # matches Python starsim: dt_jump_size = 1000
 
 # ============================================================================
 # GPU array container types
@@ -66,14 +79,16 @@ using Metal
 
 GPU-resident mirror of People state arrays.
 
-Only the arrays needed for disease dynamics are uploaded. Index states (`uid`,
-`slot`) and management fields (`ti_dead`, `ti_removed`, `scale`, `parent`)
-stay on CPU because they are only used in demographic operations.
+Only the arrays needed for disease dynamics and CRN are uploaded.
+Index states (`uid`) and management fields (`ti_dead`, `ti_removed`,
+`scale`, `parent`) stay on CPU because they are only used in demographic
+operations. The `slot` array is uploaded for CRN-safe per-agent RNG indexing.
 """
 struct GPUPeopleArrays
     alive::MtlVector{UInt8}
     age::MtlVector{Float32}
     female::MtlVector{UInt8}
+    slot::MtlVector{Int32}    # CRN slot indices (1-based)
     n::Int
 end
 
@@ -105,17 +120,41 @@ Wrapper pairing a CPU `Sim` with GPU-mirrored state arrays. Created by
 The CPU `Sim` remains the source of truth for networks, demographics,
 results, and all non-disease module state. The `GPUDiseaseArrays` hold
 the authoritative disease state while on GPU.
+
+Pre-allocated GPU edge buffers (`edge_p1`, `edge_p2`, etc.) are reused
+each timestep via `copyto!` to avoid per-step MtlVector allocation.
 """
-struct GPUSim
+mutable struct GPUSim
     sim::Starsim.Sim
     people::GPUPeopleArrays
     diseases::Dict{Symbol, GPUDiseaseArrays}
+    # Pre-allocated edge buffers (sized to max expected edges)
+    edge_p1::MtlVector{Int32}
+    edge_p2::MtlVector{Int32}
+    edge_beta::MtlVector{Float32}
+    rng_buf::MtlVector{Float32}
+    new_infected::MtlVector{UInt8}
+    jitter_buf::MtlVector{Float32}
+    snap_infected::MtlVector{UInt8}      # Snapshot buffer for synchronous transmission
+    snap_susceptible::MtlVector{UInt8}   # Snapshot buffer for synchronous transmission
+    edge_capacity::Int
+    # Cached edges for static network mode
+    cached_edges::Bool
+    cached_n_edges::Int
+    cached_bidirectional::Bool
+    cached_beta_dt::Dict{Symbol, Float32}
+    # GPU-side RNG state (xorshift32 per-thread seeds)
+    rng_seeds::MtlVector{UInt32}
+    # CRN support: base seeds (per-agent), reset each timestep
+    crn_mode::Bool
+    rng_seeds_base::MtlVector{UInt32}   # per-agent base seeds (deterministic from sim seed)
+    rng_seeds_agent::MtlVector{UInt32}  # per-agent current seeds (reset each timestep)
 end
 
 function Base.show(io::IO, g::GPUSim)
     nd = length(g.diseases)
     names = join(keys(g.diseases), ", ")
-    print(io, "GPUSim(n_agents=$(g.people.n), diseases=[$names])")
+    print(io, "GPUSim(n_agents=$(g.people.n), diseases=[$names], edge_cap=$(g.edge_capacity))")
 end
 
 # ============================================================================
@@ -128,6 +167,7 @@ function _people_to_gpu(people::Starsim.People)
         MtlVector{UInt8}(UInt8.(people.alive.raw)),
         MtlVector{Float32}(Float32.(people.age.raw)),
         MtlVector{UInt8}(UInt8.(people.female.raw)),
+        MtlVector{Int32}(Int32.(people.slot.raw)),
         n,
     )
 end
@@ -188,7 +228,55 @@ function Starsim.to_gpu(sim::Starsim.Sim)
         end
     end
 
-    return GPUSim(sim, gpu_people, gpu_diseases)
+    # Estimate edge buffer size: n_agents * max_contacts * 2 (safety margin)
+    n = gpu_people.n
+    max_contacts = 20  # conservative default
+    for (_, net) in sim.networks
+        nd = Starsim.network_data(net)
+        if hasproperty(nd.mod, :n_contacts)
+            max_contacts = max(max_contacts, nd.mod.n_contacts)
+        end
+    end
+    edge_cap = n * max_contacts
+    edge_p1 = MtlVector{Int32}(zeros(Int32, edge_cap))
+    edge_p2 = MtlVector{Int32}(zeros(Int32, edge_cap))
+    edge_beta = MtlVector{Float32}(zeros(Float32, edge_cap))
+    rng_buf = MtlVector{Float32}(zeros(Float32, edge_cap))
+    new_infected = Metal.zeros(UInt8, n)
+    jitter_buf = MtlVector{Float32}(zeros(Float32, n))
+    snap_infected = Metal.zeros(UInt8, n)
+    snap_susceptible = Metal.zeros(UInt8, n)
+
+    # Deterministic seeding: derive per-edge seeds from sim's rand_seed
+    base_seed = UInt32(sim.pars.rand_seed & 0xffffffff)
+    rng_seed_count = max(edge_cap, n)
+    edge_seeds = Vector{UInt32}(undef, rng_seed_count)
+    for i in 1:rng_seed_count
+        # Hash base_seed with index to get deterministic unique per-thread seed
+        s = base_seed ⊻ UInt32((i * 2654435761) & 0xffffffff)  # Knuth multiplicative hash
+        s = s == UInt32(0) ? UInt32(1) : s  # xorshift32 cannot have seed=0
+        edge_seeds[i] = s
+    end
+    rng_seeds = MtlVector{UInt32}(edge_seeds)
+
+    # CRN: per-agent base seeds (deterministic from sim seed + agent slot)
+    use_crn = Starsim.crn_enabled()
+    agent_base_seeds = Vector{UInt32}(undef, n)
+    for i in 1:n
+        slot_i = Int32(sim.people.slot.raw[i])
+        s = base_seed ⊻ UInt32((slot_i * 2654435761) & 0xffffffff)
+        s = s == UInt32(0) ? UInt32(1) : s
+        agent_base_seeds[i] = s
+    end
+    rng_seeds_base = MtlVector{UInt32}(agent_base_seeds)
+    rng_seeds_agent = MtlVector{UInt32}(copy(agent_base_seeds))
+
+    return GPUSim(sim, gpu_people, gpu_diseases,
+                  edge_p1, edge_p2, edge_beta, rng_buf,
+                  new_infected, jitter_buf, snap_infected, snap_susceptible, edge_cap,
+                  false, 0, false, Dict{Symbol, Float32}(),
+                  rng_seeds,
+                  use_crn, rng_seeds_base, rng_seeds_agent)
 end
 
 # ============================================================================
@@ -311,7 +399,7 @@ end
 
 function _apply_infections_sir_kernel!(
     susceptible, infected, ti_infected, ti_recovered,
-    new_infected, current_ti, dur_inf_ts, jitter, n,
+    new_infected, current_ti, exp_dur, n,
 )
     i = thread_position_in_grid_1d()
     i > n && return
@@ -319,7 +407,7 @@ function _apply_infections_sir_kernel!(
         susceptible[i]  = 0x00
         infected[i]     = 0x01
         ti_infected[i]  = current_ti
-        ti_recovered[i] = current_ti + dur_inf_ts + jitter[i]
+        ti_recovered[i] = current_ti + exp_dur[i]
     end
     return
 end
@@ -377,10 +465,201 @@ function _waning_kernel!(recovered, susceptible, ti_recovered, current_ti, wane_
 end
 
 # ============================================================================
-# High-level GPU step functions
+# Fused kernels with GPU-side xorshift32 RNG
 # ============================================================================
 
-const METAL_THREADS = 256  # Threads per threadgroup (Apple GPU wavefront = 32)
+# Xorshift32 PRNG — fast, stateful, good enough for Monte Carlo transmission.
+# Each thread maintains its own seed in `rng_seeds[i]`, mutated in-place.
+# Returns a Float32 in [0, 1).
+@inline function _xorshift32(state::UInt32)
+    state ⊻= state << UInt32(13)
+    state ⊻= state >> UInt32(17)
+    state ⊻= state << UInt32(5)
+    return state
+end
+
+@inline function _u32_to_f32(state::UInt32)
+    # Map UInt32 → Float32 in [0, 1): divide by 2^32
+    return Float32(state) * Float32(2.3283064e-10)  # 1/2^32
+end
+
+# ============================================================================
+# CRN kernels — per-agent seeds reset and pairwise XOR combining
+# ============================================================================
+
+# Reset per-agent seeds to a deterministic state for timestep `ti`.
+# Matches Python starsim: seed = base_seed + ti * 1000
+function _crn_reset_seeds_kernel!(rng_seeds_agent, rng_seeds_base, ti_jump, n)
+    i = thread_position_in_grid_1d()
+    i > n && return
+    base = rng_seeds_base[i]
+    s = base + ti_jump
+    # Ensure non-zero (xorshift32 fixpoint)
+    if s == UInt32(0)
+        s = UInt32(1)
+    end
+    rng_seeds_agent[i] = s
+    return
+end
+
+# Pairwise XOR combining: for edge (src, trg), draw from each agent's
+# independent stream and XOR-combine to produce a single Float32.
+# Mirrors the CPU MultiRandom.combine_rvs logic.
+@inline function _crn_pairwise_rng(seed_src::UInt32, seed_trg::UInt32)
+    # Advance both streams
+    s1 = _xorshift32(seed_src)
+    s2 = _xorshift32(seed_trg)
+    # XOR combine (product bits ⊻ difference bits) — GPU Float32 variant
+    f1 = _u32_to_f32(s1)
+    f2 = _u32_to_f32(s2)
+    prod_bits = reinterpret(UInt32, f1 * f2)
+    diff_bits = reinterpret(UInt32, f1 - f2)
+    combined = prod_bits ⊻ diff_bits
+    return _u32_to_f32(combined), s1, s2
+end
+
+# ============================================================================
+# CRN-aware fused transmission kernels
+# ============================================================================
+
+# CRN variant of fused SIR transmission: uses per-agent slot-indexed seeds
+# with pairwise XOR combining. Reads from snapshot buffers, writes to new_infected.
+function _crn_fused_transmit_sir_kernel!(
+    new_infected, snap_infected, snap_susceptible, rel_trans, rel_sus,
+    p1, p2, edge_beta, beta_dt,
+    rng_seeds_agent, slot,
+    n_edges,
+)
+    i = thread_position_in_grid_1d()
+    i > n_edges && return
+
+    src = p1[i]
+    trg = p2[i]
+
+    if snap_infected[src] == 0x01 && snap_susceptible[trg] == 0x01
+        prob = beta_dt * rel_trans[src] * rel_sus[trg] * edge_beta[i]
+
+        # CRN pairwise random number from src and trg agent seeds
+        seed_src = rng_seeds_agent[src]
+        seed_trg = rng_seeds_agent[trg]
+        rng_val, new_s1, new_s2 = _crn_pairwise_rng(seed_src, seed_trg)
+
+        # Write back advanced seeds (benign race if agent appears in multiple edges)
+        rng_seeds_agent[src] = new_s1
+        rng_seeds_agent[trg] = new_s2
+
+        if rng_val < prob
+            new_infected[trg] = 0x01
+        end
+    end
+    return
+end
+
+# CRN variant of fused SIS transmission — reads snapshots, writes new_infected
+function _crn_fused_transmit_sis_kernel!(
+    new_infected, snap_infected, snap_susceptible, rel_trans, rel_sus,
+    p1, p2, edge_beta, beta_dt,
+    rng_seeds_agent, slot,
+    n_edges,
+)
+    i = thread_position_in_grid_1d()
+    i > n_edges && return
+
+    src = p1[i]
+    trg = p2[i]
+
+    if snap_infected[src] == 0x01 && snap_susceptible[trg] == 0x01
+        prob = beta_dt * rel_trans[src] * rel_sus[trg] * edge_beta[i]
+
+        seed_src = rng_seeds_agent[src]
+        seed_trg = rng_seeds_agent[trg]
+        rng_val, new_s1, new_s2 = _crn_pairwise_rng(seed_src, seed_trg)
+        rng_seeds_agent[src] = new_s1
+        rng_seeds_agent[trg] = new_s2
+
+        if rng_val < prob
+            new_infected[trg] = 0x01
+        end
+    end
+    return
+end
+
+# ============================================================================
+# Non-CRN fused transmission kernels (original — per-edge seeds)
+# ============================================================================
+
+# Fused transmission kernel: generates its own random numbers on GPU,
+# evaluates transmission against snapshot state, and flags new infections.
+# Eliminates: CPU rand generation, CPU→GPU rng upload.
+function _fused_transmit_sir_kernel!(
+    new_infected, snap_infected, snap_susceptible, rel_trans, rel_sus,
+    p1, p2, edge_beta, beta_dt, rng_seeds, n_edges,
+)
+    i = thread_position_in_grid_1d()
+    i > n_edges && return
+
+    src = p1[i]
+    trg = p2[i]
+
+    if snap_infected[src] == 0x01 && snap_susceptible[trg] == 0x01
+        prob = beta_dt * rel_trans[src] * rel_sus[trg] * edge_beta[i]
+
+        # GPU-side random number
+        seed = rng_seeds[i]
+        seed = _xorshift32(seed)
+        rng_val = _u32_to_f32(seed)
+
+        # Write back mutated seed
+        rng_seeds[i] = seed
+
+        if rng_val < prob
+            new_infected[trg] = 0x01
+        end
+    end
+    return
+end
+
+# SIS variant — reads snapshots, writes new_infected
+function _fused_transmit_sis_kernel!(
+    new_infected, snap_infected, snap_susceptible, rel_trans, rel_sus,
+    p1, p2, edge_beta, beta_dt, rng_seeds, n_edges,
+)
+    i = thread_position_in_grid_1d()
+    i > n_edges && return
+
+    src = p1[i]
+    trg = p2[i]
+
+    if snap_infected[src] == 0x01 && snap_susceptible[trg] == 0x01
+        prob = beta_dt * rel_trans[src] * rel_sus[trg] * edge_beta[i]
+
+        seed = rng_seeds[i]
+        seed = _xorshift32(seed)
+        rng_val = _u32_to_f32(seed)
+        rng_seeds[i] = seed
+
+        if rng_val < prob
+            new_infected[trg] = 0x01
+        end
+    end
+    return
+end
+
+# Fused recovery + apply kernel for SIR: per-agent, checks recovery AND
+# could do other per-agent work in a single pass.
+function _fused_recovery_sir_kernel!(infected, recovered, ti_recovered, current_ti, n)
+    i = thread_position_in_grid_1d()
+    i > n && return
+    if infected[i] == 0x01 && ti_recovered[i] <= current_ti
+        infected[i]  = 0x00
+        recovered[i] = 0x01
+    end
+    return
+end
+
+# ============================================================================
+# High-level GPU step functions
+# ============================================================================
 
 """
     gpu_step_state!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
@@ -417,24 +696,26 @@ function gpu_step_state!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     return gsim
 end
 
+"""Ensure edge buffers can hold at least `n` elements, growing if needed."""
+function _ensure_edge_capacity!(gsim::GPUSim, n::Int)
+    if n > gsim.edge_capacity
+        new_cap = max(n, gsim.edge_capacity * 2)
+        gsim.edge_p1 = MtlVector{Int32}(zeros(Int32, new_cap))
+        gsim.edge_p2 = MtlVector{Int32}(zeros(Int32, new_cap))
+        gsim.edge_beta = MtlVector{Float32}(zeros(Float32, new_cap))
+        gsim.rng_buf = MtlVector{Float32}(zeros(Float32, new_cap))
+        gsim.edge_capacity = new_cap
+    end
+    return
+end
+
 """
     gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
 
 Run GPU-accelerated transmission for one disease across all networks.
 
-# Algorithm
-1. Read edge arrays (`p1`, `p2`, `beta`) from the CPU sim (already updated
-   by the CPU network `step!`) and copy them to GPU as `Int32`/`Float32`.
-2. Generate uniform random numbers on CPU and upload to GPU.
-3. Launch the transmission kernel — each thread evaluates one directed edge.
-4. For bidirectional networks, launch a second pass with swapped endpoints.
-5. Apply new infections via a second kernel that flips state arrays.
-
-# Notes
-- Random numbers are generated on CPU (Metal has no built-in GPU RNG).
-- Infection-source logging is skipped (no dynamic allocation on GPU).
-- Recovery times for SIR are set with pre-computed jitter during the
-  apply-infections kernel.
+Uses pre-allocated GPU edge buffers to avoid per-timestep MtlVector
+allocation. Buffers grow automatically if edge count exceeds capacity.
 """
 function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     gpu_dis = gsim.diseases[disease_name]
@@ -443,8 +724,12 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     n_agents = Int32(gpu_dis.n)
     ti_f = Float32(current_ti)
 
-    # Accumulate new infections across all networks
-    new_infected = Metal.zeros(UInt8, gpu_dis.n)
+    # Snapshot infected/susceptible for synchronous transmission (matching CPU)
+    copyto!(gsim.snap_infected, gpu_dis.infected)
+    copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
+
+    # Reset new_infected buffer
+    Metal.fill!(gsim.new_infected, 0x00)
 
     for (net_name, net) in gsim.sim.networks
         edges = Starsim.network_edges(net)
@@ -458,49 +743,62 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
         n_edges_i32 = Int32(n_edges)
         groups_e = cld(n_edges, METAL_THREADS)
 
-        # Upload edge arrays to GPU (edges are regenerated each timestep)
-        gpu_p1 = MtlVector{Int32}(Int32.(edges.p1))
-        gpu_p2 = MtlVector{Int32}(Int32.(edges.p2))
-        gpu_eb = MtlVector{Float32}(Float32.(edges.beta))
+        # Ensure buffers are large enough
+        _ensure_edge_capacity!(gsim, n_edges)
 
-        # Pre-generate random numbers on CPU, upload to GPU
-        rng_fwd = MtlVector{Float32}(rand(Float32, n_edges))
+        # Copy edge data into pre-allocated GPU buffers (no allocation)
+        cpu_p1 = Int32.(edges.p1)
+        cpu_p2 = Int32.(edges.p2)
+        cpu_eb = Float32.(edges.beta)
+        copyto!(gsim.edge_p1, 1, cpu_p1, 1, n_edges)
+        copyto!(gsim.edge_p2, 1, cpu_p2, 1, n_edges)
+        copyto!(gsim.edge_beta, 1, cpu_eb, 1, n_edges)
 
-        # Forward direction: p1[i] → p2[i]
+        # Generate random numbers and copy to pre-allocated buffer
+        cpu_rng = rand(Float32, n_edges)
+        copyto!(gsim.rng_buf, 1, cpu_rng, 1, n_edges)
+
+        # Forward direction: p1[i] → p2[i] — reads from snapshots
         @metal threads=METAL_THREADS groups=groups_e _transmission_kernel!(
-            new_infected, gpu_dis.susceptible, gpu_dis.infected,
+            gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
             gpu_dis.rel_trans, gpu_dis.rel_sus,
-            gpu_p1, gpu_p2, gpu_eb, beta_dt_f32, rng_fwd, n_edges_i32,
+            gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+            beta_dt_f32, gsim.rng_buf, n_edges_i32,
         )
 
-        # Reverse direction for bidirectional networks: p2[i] → p1[i]
+        # Reverse direction for bidirectional networks
         if Starsim.network_data(net).bidirectional
-            rng_rev = MtlVector{Float32}(rand(Float32, n_edges))
+            cpu_rng_rev = rand(Float32, n_edges)
+            copyto!(gsim.rng_buf, 1, cpu_rng_rev, 1, n_edges)
             @metal threads=METAL_THREADS groups=groups_e _transmission_kernel!(
-                new_infected, gpu_dis.susceptible, gpu_dis.infected,
+                gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
                 gpu_dis.rel_trans, gpu_dis.rel_sus,
-                gpu_p2, gpu_p1, gpu_eb, beta_dt_f32, rng_rev, n_edges_i32,
+                gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                beta_dt_f32, gsim.rng_buf, n_edges_i32,
             )
         end
     end
 
     Metal.synchronize()
 
-    # Apply accumulated new infections to state arrays
+    # Apply accumulated new infections
     groups_a = cld(n_agents, METAL_THREADS)
 
     if disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
         dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
-        # Per-agent jitter for recovery time (uniform in [0, 0.5 * dur_inf_ts])
-        jitter = MtlVector{Float32}(rand(Float32, gpu_dis.n) .* (dur_inf_ts * 0.5f0))
+        # Exponential recovery duration: -mean * log(U), U ~ Uniform(0,1)
+        cpu_rng = rand(Float32, gpu_dis.n)
+        cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng, 1f-10)))
+        copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
         @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
-            gpu_dis.ti_recovered, new_infected, ti_f, dur_inf_ts, jitter, n_agents,
+            gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+            gsim.jitter_buf, n_agents,
         )
     elseif disease isa Starsim.SIS
         @metal threads=METAL_THREADS groups=groups_a _apply_infections_sis_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
-            new_infected, ti_f, n_agents,
+            gsim.new_infected, ti_f, n_agents,
         )
     end
 
@@ -515,29 +813,28 @@ Combined GPU disease step: state transitions (recovery) followed by
 transmission. Equivalent to calling `step_state!` then `step!` for one
 disease, but both execute on the Metal GPU.
 
-Network `step!` must still run on CPU before each `gpu_step!` call, since
-edge arrays are dynamically regenerated each timestep.
+⚠ **Loop ordering**: In the Python starsim loop, `diseases.step_state`
+(step 5) runs BEFORE `networks.step` (step 7), which runs BEFORE
+`diseases.step` i.e. transmission (step 9). This convenience function
+bundles steps 5 and 9 together, which is only correct when the network
+does not change between recovery and transmission within a single timestep.
 
-# Example
+For full fidelity with the Python loop order, call `gpu_step_state!` and
+`gpu_transmit!` separately with `networks.step` in between:
+
 ```julia
-sim = Sim(n_agents=100_000, diseases=SIR(beta=0.05), networks=RandomNet())
-init!(sim)
-gsim = to_gpu(sim)
-
 for ti in 1:sim.t.npts
-    # 1. Network rewiring on CPU
+    # Step 5: State transitions (recovery)
+    gpu_step_state!(gsim, :sir; current_ti=ti)
+
+    # Step 7: Network rewiring on CPU
     for (_, net) in sim.networks
         step!(net, sim)
     end
 
-    # 2. Disease dynamics on GPU
-    for name in keys(gsim.diseases)
-        gpu_step!(gsim, name; current_ti=ti)
-    end
+    # Step 9: Transmission
+    gpu_transmit!(gsim, :sir; current_ti=ti)
 end
-
-# 3. Download final state
-sim = to_cpu(gsim)
 ```
 
 # What is NOT handled on GPU
@@ -597,6 +894,7 @@ function sync_to_gpu!(gsim::GPUSim)
     copyto!(gsim.people.alive,  UInt8.(people.alive.raw[1:n_p]))
     copyto!(gsim.people.age,    Float32.(people.age.raw[1:n_p]))
     copyto!(gsim.people.female, UInt8.(people.female.raw[1:n_p]))
+    copyto!(gsim.people.slot,   Int32.(people.slot.raw[1:n_p]))
 
     for (name, gpu_dis) in gsim.diseases
         disease = gsim.sim.diseases[name]
@@ -623,10 +921,465 @@ function _sync_infection_to_gpu!(inf::Starsim.InfectionData, gpu::GPUDiseaseArra
 end
 
 # ============================================================================
+# Fused GPU step — single-pass recovery + transmission with GPU-side RNG
+# ============================================================================
+
+"""
+    gpu_reset_rng!(gsim::GPUSim; current_ti::Int)
+
+Reset per-agent RNG seeds to a deterministic state for timestep `ti`.
+Called at the start of each timestep in CRN mode to ensure reproducibility
+regardless of the order operations are called within a timestep.
+
+Matches the Python starsim pattern: `seed = base_seed + ti * dt_jump_size`.
+"""
+function gpu_reset_rng!(gsim::GPUSim; current_ti::Int)
+    n = Int32(gsim.people.n)
+    ti_jump = UInt32(current_ti) * CRN_DT_JUMP
+    groups = cld(Int(n), METAL_THREADS)
+    @metal threads=METAL_THREADS groups=groups _crn_reset_seeds_kernel!(
+        gsim.rng_seeds_agent, gsim.rng_seeds_base, ti_jump, n,
+    )
+    Metal.synchronize()
+    return gsim
+end
+
+"""
+    gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
+
+All-GPU disease step using fused kernels and GPU-side xorshift32 RNG.
+Eliminates all per-step CPU→GPU random number transfers for transmission.
+
+Uses synchronous (snapshot+batch) transmission matching the CPU code:
+  1. Recovery kernel runs first
+  2. Infected/susceptible arrays are snapshot-copied on GPU
+  3. Fused transmission kernels read from snapshots, write to new_infected buffer
+  4. Apply kernel batch-applies infections with exponential recovery durations
+
+When CRN mode is active (`crn_enabled()` was true at `to_gpu` time):
+  - Resets per-agent seeds deterministically for this timestep
+  - Uses pairwise XOR combining of source/target agent RNG streams
+  - Produces reproducible results given the same `sim.pars.rand_seed`
+
+When CRN is off, uses per-edge seeds (faster, non-reproducible).
+
+Requires cached edges: call `cache_edges!(gsim)` first.
+"""
+function gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
+    gsim.cached_edges || error("gpu_step_fused! requires cached edges. Call cache_edges!(gsim) first.")
+
+    gpu_dis = gsim.diseases[disease_name]
+    disease = gsim.sim.diseases[disease_name]
+    n_agents = Int32(gpu_dis.n)
+    ti_f = Float32(current_ti)
+    n_edges = Int32(gsim.cached_n_edges)
+    groups_a = cld(Int(n_agents), METAL_THREADS)
+    groups_e = cld(Int(n_edges), METAL_THREADS)
+
+    beta_dt_f32 = get(gsim.cached_beta_dt, disease_name, Float32(0))
+
+    # CRN: reset per-agent seeds deterministically for this timestep
+    if gsim.crn_mode
+        ti_jump = UInt32(current_ti) * CRN_DT_JUMP
+        @metal threads=METAL_THREADS groups=groups_a _crn_reset_seeds_kernel!(
+            gsim.rng_seeds_agent, gsim.rng_seeds_base, ti_jump, n_agents,
+        )
+    else
+        # Non-CRN: ensure per-edge seed array is large enough
+        if length(gsim.rng_seeds) < n_edges
+            gsim.rng_seeds = MtlVector{UInt32}(rand(UInt32(1):UInt32(0xfffffffe), Int(n_edges)))
+        end
+    end
+
+    if disease isa Starsim.SIR && gpu_dis.recovered !== nothing
+        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+
+        # Kernel 1: Recovery (per-agent)
+        @metal threads=METAL_THREADS groups=groups_a _fused_recovery_sir_kernel!(
+            gpu_dis.infected, gpu_dis.recovered, gpu_dis.ti_recovered,
+            ti_f, n_agents,
+        )
+
+        if beta_dt_f32 > Float32(0)
+            # Snapshot infected/susceptible for synchronous transmission
+            copyto!(gsim.snap_infected, gpu_dis.infected)
+            copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
+            Metal.fill!(gsim.new_infected, 0x00)
+
+            if gsim.crn_mode
+                # CRN path: pairwise XOR combining — reads snapshots, writes new_infected
+                @metal threads=METAL_THREADS groups=groups_e _crn_fused_transmit_sir_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds_agent, gsim.people.slot,
+                    n_edges,
+                )
+                if gsim.cached_bidirectional
+                    @metal threads=METAL_THREADS groups=groups_e _crn_fused_transmit_sir_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                        beta_dt_f32, gsim.rng_seeds_agent, gsim.people.slot,
+                        n_edges,
+                    )
+                end
+            else
+                # Non-CRN path: per-edge seeds — reads snapshots, writes new_infected
+                @metal threads=METAL_THREADS groups=groups_e _fused_transmit_sir_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds, n_edges,
+                )
+                if gsim.cached_bidirectional
+                    @metal threads=METAL_THREADS groups=groups_e _fused_transmit_sir_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                        beta_dt_f32, gsim.rng_seeds, n_edges,
+                    )
+                end
+            end
+
+            Metal.synchronize()
+
+            # Apply infections with exponential recovery duration
+            cpu_rng = rand(Float32, Int(n_agents))
+            cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng, 1f-10)))
+            copyto!(gsim.jitter_buf, 1, cpu_dur, 1, Int(n_agents))
+            @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
+                gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
+                gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+                gsim.jitter_buf, n_agents,
+            )
+        end
+    elseif disease isa Starsim.SIS
+        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+
+        @metal threads=METAL_THREADS groups=groups_a _sis_recovery_kernel!(
+            gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_infected,
+            ti_f, dur_inf_ts, n_agents,
+        )
+
+        if beta_dt_f32 > Float32(0)
+            # Snapshot infected/susceptible for synchronous transmission
+            copyto!(gsim.snap_infected, gpu_dis.infected)
+            copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
+            Metal.fill!(gsim.new_infected, 0x00)
+
+            if gsim.crn_mode
+                @metal threads=METAL_THREADS groups=groups_e _crn_fused_transmit_sis_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds_agent, gsim.people.slot,
+                    n_edges,
+                )
+                if gsim.cached_bidirectional
+                    @metal threads=METAL_THREADS groups=groups_e _crn_fused_transmit_sis_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                        beta_dt_f32, gsim.rng_seeds_agent, gsim.people.slot,
+                        n_edges,
+                    )
+                end
+            else
+                @metal threads=METAL_THREADS groups=groups_e _fused_transmit_sis_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds, n_edges,
+                )
+                if gsim.cached_bidirectional
+                    @metal threads=METAL_THREADS groups=groups_e _fused_transmit_sis_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                        beta_dt_f32, gsim.rng_seeds, n_edges,
+                    )
+                end
+            end
+
+            Metal.synchronize()
+
+            # Apply infections
+            @metal threads=METAL_THREADS groups=groups_a _apply_infections_sis_kernel!(
+                gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
+                gsim.new_infected, ti_f, n_agents,
+            )
+        end
+    end
+
+    Metal.synchronize()
+    return gsim
+end
+
+# ============================================================================
+# Static network caching — upload edges once, reuse every timestep
+# ============================================================================
+
+"""
+    cache_edges!(gsim::GPUSim)
+
+Snapshot the current CPU edge arrays to GPU and mark them as cached.
+Subsequent calls to `gpu_transmit!` will skip per-step edge upload and
+reuse these cached GPU buffers — eliminating the main CPU→GPU bottleneck.
+
+Call this after the first `network.step!` to capture representative edges.
+For truly static networks (edges don't change), this gives the GPU's
+peak throughput.
+
+To uncache: `uncache_edges!(gsim)`.
+"""
+function cache_edges!(gsim::GPUSim)
+    total_edges = 0
+    bidir = false
+
+    for (net_name, net) in gsim.sim.networks
+        edges = Starsim.network_edges(net)
+        n_edges = length(edges)
+        total_edges += n_edges
+        bidir = bidir || Starsim.network_data(net).bidirectional
+    end
+
+    _ensure_edge_capacity!(gsim, total_edges)
+
+    # Upload edges and cache beta_per_dt for each disease
+    offset = 0
+    for (net_name, net) in gsim.sim.networks
+        edges = Starsim.network_edges(net)
+        n_edges = length(edges)
+        n_edges == 0 && continue
+
+        cpu_p1 = Int32.(edges.p1)
+        cpu_p2 = Int32.(edges.p2)
+        cpu_eb = Float32.(edges.beta)
+        copyto!(gsim.edge_p1, offset + 1, cpu_p1, 1, n_edges)
+        copyto!(gsim.edge_p2, offset + 1, cpu_p2, 1, n_edges)
+        copyto!(gsim.edge_beta, offset + 1, cpu_eb, 1, n_edges)
+        offset += n_edges
+
+        # Cache beta_per_dt for each disease
+        for (dname, disease) in gsim.sim.diseases
+            dd = Starsim.disease_data(disease)
+            bdt = get(dd.beta_per_dt, net_name, 0.0)
+            gsim.cached_beta_dt[dname] = Float32(bdt)
+        end
+    end
+
+    # Ensure rng_buf is large enough
+    if length(gsim.rng_buf) < total_edges
+        gsim.rng_buf = MtlVector{Float32}(zeros(Float32, total_edges))
+    end
+
+    gsim.cached_edges = true
+    gsim.cached_n_edges = total_edges
+    gsim.cached_bidirectional = bidir
+    Metal.synchronize()
+    return gsim
+end
+
+"""Uncache edges, reverting to per-step upload."""
+function uncache_edges!(gsim::GPUSim)
+    gsim.cached_edges = false
+    gsim.cached_n_edges = 0
+    return gsim
+end
+
+"""
+    gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
+
+Transmission using cached GPU edges. No CPU→GPU edge transfer — only
+random number generation and kernel launch. This is the fast path for
+static or slowly-changing networks.
+"""
+function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
+    gsim.cached_edges || error("Edges not cached. Call cache_edges!(gsim) first.")
+
+    gpu_dis = gsim.diseases[disease_name]
+    n_agents = Int32(gpu_dis.n)
+    ti_f = Float32(current_ti)
+    n_edges = gsim.cached_n_edges
+    n_edges_i32 = Int32(n_edges)
+    groups_e = cld(n_edges, METAL_THREADS)
+
+    beta_dt_f32 = get(gsim.cached_beta_dt, disease_name, Float32(0))
+    beta_dt_f32 == Float32(0) && return gsim
+
+    # Snapshot infected/susceptible for synchronous transmission
+    copyto!(gsim.snap_infected, gpu_dis.infected)
+    copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
+
+    # Reset new_infected
+    fill!(gsim.new_infected, 0x00)
+
+    # Only need to upload random numbers (CPU → GPU)
+    cpu_rng = rand(Float32, n_edges)
+    copyto!(gsim.rng_buf, 1, cpu_rng, 1, n_edges)
+
+    # Forward transmission — reads from snapshots
+    @metal threads=METAL_THREADS groups=groups_e _transmission_kernel!(
+        gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
+        gpu_dis.rel_trans, gpu_dis.rel_sus,
+        gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+        beta_dt_f32, gsim.rng_buf, n_edges_i32,
+    )
+
+    # Reverse direction
+    if gsim.cached_bidirectional
+        cpu_rng_rev = rand(Float32, n_edges)
+        copyto!(gsim.rng_buf, 1, cpu_rng_rev, 1, n_edges)
+        @metal threads=METAL_THREADS groups=groups_e _transmission_kernel!(
+            gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
+            gpu_dis.rel_trans, gpu_dis.rel_sus,
+            gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+            beta_dt_f32, gsim.rng_buf, n_edges_i32,
+        )
+    end
+
+    Metal.synchronize()
+
+    # Apply infections
+    groups_a = cld(n_agents, METAL_THREADS)
+    disease = gsim.sim.diseases[disease_name]
+
+    if disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
+        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+        # Exponential recovery duration: -mean * log(U), U ~ Uniform(0,1)
+        cpu_rng_dur = rand(Float32, gpu_dis.n)
+        cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng_dur, 1f-10)))
+        copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
+        @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
+            gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
+            gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+            gsim.jitter_buf, n_agents,
+        )
+    elseif disease isa Starsim.SIS
+        @metal threads=METAL_THREADS groups=groups_a _apply_infections_sis_kernel!(
+            gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
+            gsim.new_infected, ti_f, n_agents,
+        )
+    end
+
+    Metal.synchronize()
+    return gsim
+end
+
+# ============================================================================
+# High-level run_gpu! — drop-in GPU backend for run!(sim; backend=:gpu)
+# ============================================================================
+
+"""
+    Starsim.run_gpu!(sim::Sim; verbose::Int=1)
+
+GPU backend for `run!`. Called automatically when `run!(sim; backend=:gpu)`.
+
+Handles the full lifecycle:
+1. `init!(sim)` if needed
+2. Generate static edges on CPU, upload to GPU with `cache_edges!`
+3. Run the integration loop using `gpu_step_fused!` (fused kernels, GPU-side RNG)
+4. Track results each timestep (GPU→CPU→GPU round-trip)
+5. `to_cpu(gsim)` to write final state back
+6. Finalize and scale results
+
+# Example
+```julia
+using Metal  # triggers GPU extension loading
+sim = Sim(n_agents=1_000_000, diseases=SIR(beta=0.05, dur_inf=10.0),
+          networks=RandomNet(n_contacts=10), stop=365.0)
+run!(sim; backend=:gpu)
+sim.plot()
+```
+"""
+function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1)
+    if !sim.initialized
+        Starsim.init!(sim)
+    end
+
+    n_agents = sim.pars.n_agents
+    npts = sim.t.npts
+
+    if verbose >= 1
+        println("Running simulation on GPU ($(n_agents) agents, $(npts) steps, " *
+                "dt=$(sim.pars.dt), device=$(Metal.current_device()))")
+    end
+
+    # Generate edges once on CPU, then cache on GPU
+    for (_, net) in sim.networks
+        Starsim.step!(net, sim)
+    end
+
+    gsim = Starsim.to_gpu(sim)
+    cache_edges!(gsim)
+
+    disease_names = collect(keys(sim.diseases))
+
+    for ti in 1:npts
+        sim.loop.ti = ti
+
+        if verbose >= 2
+            year = sim.pars.start + (ti - 1) * sim.pars.dt
+            println("  Step $ti / $npts (year=$(round(year, digits=2)))")
+        end
+
+        # Module lifecycle: start_step
+        for (_, mod) in Starsim.all_modules(sim)
+            Starsim.start_step!(mod, sim)
+        end
+
+        # GPU disease steps (fused recovery + transmission)
+        for dname in disease_names
+            gpu_step_fused!(gsim, dname; current_ti=ti)
+        end
+
+        # Results tracking: round-trip GPU → CPU → GPU
+        Starsim.to_cpu(gsim)
+        Starsim.update_people_results!(sim.people, ti, sim.results)
+        for (_, mod) in Starsim.all_modules(sim)
+            Starsim.update_results!(mod, sim)
+        end
+        if ti < npts
+            sync_to_gpu!(gsim)
+        end
+
+        # Module lifecycle: finish_step
+        for (_, mod) in Starsim.all_modules(sim)
+            Starsim.finish_step!(mod, sim)
+        end
+    end
+
+    Starsim.to_cpu(gsim)
+
+    # Finalize all modules
+    for (_, mod) in Starsim.all_modules(sim)
+        Starsim.finalize!(mod, sim)
+    end
+
+    # Scale results
+    if sim.pars.pop_scale != 1.0
+        Starsim.scale_results!(sim.results, sim.pars.pop_scale)
+        for (_, mod) in Starsim.all_modules(sim)
+            Starsim.scale_results!(Starsim.module_results(mod), sim.pars.pop_scale)
+        end
+    end
+
+    if verbose >= 1
+        println("GPU simulation complete ($npts steps)")
+    end
+
+    sim.complete = true
+    return sim
+end
+
+# ============================================================================
 # Exports
 # ============================================================================
 
 export GPUSim, GPUPeopleArrays, GPUDiseaseArrays
 export gpu_step!, gpu_step_state!, gpu_transmit!, gpu_waning!, sync_to_gpu!
+export cache_edges!, uncache_edges!, gpu_transmit_cached!
+export gpu_step_fused!, gpu_reset_rng!
 
 end # module
