@@ -37,11 +37,14 @@ Let's compute how the peak prevalence of an SIR epidemic changes with the
 transmission rate `beta`.
 
 ```{julia}
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim = Sim(
     n_agents = 1000,
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
-    networks = RandomNet(n_contacts=10),
-    start = 0.0, stop = 200.0, dt = 1.0,
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
     rand_seed = 42,
 )
 init!(sim)
@@ -85,7 +88,7 @@ changes in beta — typically during the exponential growth phase.
 Let's sweep over beta values and compute the sensitivity at each point:
 
 ```{julia}
-betas = 0.01:0.01:0.15
+betas = 0.005:0.005:0.10
 max_prevs = Float64[]
 sensitivities = Float64[]
 
@@ -93,8 +96,8 @@ for b in betas
     s = Sim(
         n_agents = 1000,
         diseases = SIR(beta=b, dur_inf=4.0, init_prev=0.01),
-        networks = RandomNet(n_contacts=10),
-        start = 0.0, stop = 200.0, dt = 1.0,
+        networks = RandomNet(n_contacts=n_contacts),
+        start = 0.0, stop = 40.0, dt = 1.0,
         rand_seed = 42,
     )
     init!(s)
@@ -131,8 +134,8 @@ gradient-based optimization methods:
 target_sim = Sim(
     n_agents = 1000,
     diseases = SIR(beta=0.08, dur_inf=4.0, init_prev=0.01),
-    networks = RandomNet(n_contacts=10),
-    start = 0.0, stop = 200.0, dt = 1.0,
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
     rand_seed = 1,
 )
 init!(target_sim)
@@ -143,9 +146,9 @@ println("Target max prevalence: $(round(target_prev, digits=4))")
 # Set up calibration
 base_sim = Sim(
     n_agents = 1000,
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
-    networks = RandomNet(n_contacts=10),
-    start = 0.0, stop = 200.0, dt = 1.0,
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
     rand_seed = 42,
 )
 init!(base_sim)

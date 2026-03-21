@@ -15,8 +15,10 @@ engine: python
 ```{python}
 import starsim as ss
 
-net = ss.RandomNet(n_contacts=10)
-disease = ss.SIR(beta=0.1, dur_inf=4, init_prev=0.02)
+n_contacts = 10
+beta = 0.5 / n_contacts
+net = ss.RandomNet(n_contacts=n_contacts)
+disease = ss.SIR(beta=beta, dur_inf=4, init_prev=0.02)
 
 sim = ss.Sim(
     n_agents=1_000,
@@ -24,7 +26,7 @@ sim = ss.Sim(
     diseases=disease,
     dt=1.0,
     start=0,
-    stop=200,
+    stop=40,
     rand_seed=42,
     verbose=0,
 )
@@ -34,14 +36,18 @@ sim.run()
 ## Multiple networks
 
 ```{python}
+n_contacts_hh = 4
+n_contacts_work = 8
+beta = 0.5 / (n_contacts_hh + n_contacts_work)
+
 sim_multi = ss.Sim(
     n_agents=1_000,
     networks=[
-        ss.RandomNet(name='household', n_contacts=4),
-        ss.RandomNet(name='workplace', n_contacts=8),
+        ss.RandomNet(name='household', n_contacts=n_contacts_hh),
+        ss.RandomNet(name='workplace', n_contacts=n_contacts_work),
     ],
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_multi.run()
 

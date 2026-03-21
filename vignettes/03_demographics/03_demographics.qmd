@@ -22,12 +22,15 @@ First, let's run a baseline SIR model *without* demographics for comparison:
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_base = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -44,11 +47,11 @@ The `Births` and `Deaths` modules add demographic processes. Rates are specified
 ```{julia}
 sim_demo = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     demographics = [Births(birth_rate=20.0), Deaths(death_rate=15.0)],
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -79,11 +82,11 @@ When the birth rate exceeds the death rate, the population grows. When the death
 # Growing population
 sim_grow = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     demographics = [Births(birth_rate=30.0), Deaths(death_rate=10.0)],
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -92,11 +95,11 @@ run!(sim_grow)
 # Declining population
 sim_decline = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     demographics = [Births(birth_rate=10.0), Deaths(death_rate=30.0)],
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )

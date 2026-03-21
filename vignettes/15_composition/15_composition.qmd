@@ -79,11 +79,11 @@ An `EpiNet` can be directly converted to a Starsim simulation via
 ```{julia}
 sim = to_sim(sir_net;
     n_agents = 1000,
-    beta = 0.05,
+    beta = 0.5 / 10,
     dur_inf = 4.0,
     networks = RandomNet(n_contacts=10),
     start = 0.0,
-    stop = 100.0,
+    stop = 40.0,
     rand_seed = 42,
 )
 run!(sim; verbose=0)
@@ -100,8 +100,10 @@ population.
 
 ```{julia}
 # Create modules
-sir = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01)
-net = RandomNet(n_contacts=10)
+n_contacts = 10
+beta = 0.5 / n_contacts
+sir = SIR(beta=beta, dur_inf=4.0, init_prev=0.01)
+net = RandomNet(n_contacts=n_contacts)
 
 # Wrap as sharers
 disease_sharer = EpiSharer(:sir_disease, sir)
@@ -129,8 +131,8 @@ You can also build UWDs by creating multiple sharers:
 
 ```{julia}
 # Create sharers with specific configurations
-disease_sharer_2 = EpiSharer(:sir_disease_2, SIR(beta=0.05, dur_inf=4.0))
-network_sharer_2 = EpiSharer(:contact_net_2, RandomNet(n_contacts=10))
+disease_sharer_2 = EpiSharer(:sir_disease_2, SIR(beta=beta, dur_inf=4.0))
+network_sharer_2 = EpiSharer(:contact_net_2, RandomNet(n_contacts=n_contacts))
 
 # Build UWD from sharers
 uwd_manual = epi_uwd([disease_sharer_2, network_sharer_2])
@@ -147,7 +149,7 @@ sim_composed = compose_epi(
     [disease_sharer, network_sharer];
     n_agents = 1000,
     start = 0.0,
-    stop = 100.0,
+    stop = 40.0,
     rand_seed = 42,
 )
 run!(sim_composed; verbose=0)
@@ -164,10 +166,10 @@ produces identical results to a manually assembled simulation:
 # Manual assembly
 sim_manual = Sim(
     n_agents = 1000,
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
-    networks = RandomNet(n_contacts=10),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
     start = 0.0,
-    stop = 100.0,
+    stop = 40.0,
     rand_seed = 42,
 )
 run!(sim_manual; verbose=0)
@@ -189,8 +191,8 @@ interacting components:
 
 ```{julia}
 # Three-component model: disease + network + demographics
-sir2 = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01)
-net2 = RandomNet(n_contacts=10)
+sir2 = SIR(beta=beta, dur_inf=4.0, init_prev=0.01)
+net2 = RandomNet(n_contacts=n_contacts)
 births = Births(birth_rate=20.0)  # per 1000 per year
 deaths = Deaths(death_rate=15.0)
 
@@ -202,7 +204,7 @@ sim3 = compose_epi(
     [disease_s, network_s, demog_s];
     n_agents = 1000,
     start = 0.0,
-    stop = 50.0,
+    stop = 40.0,
     rand_seed = 42,
 )
 run!(sim3; verbose=0)

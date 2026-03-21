@@ -33,12 +33,15 @@ import numpy as np
 ## Basic SIR simulation
 
 ```{python}
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim = ss.Sim(
     n_agents=1000,
-    diseases=ss.SIR(beta=0.05, dur_inf=4),
-    networks=ss.RandomNet(n_contacts=10),
+    diseases=ss.SIR(beta=beta, dur_inf=4),
+    networks=ss.RandomNet(n_contacts=n_contacts),
     start=0,
-    stop=100,
+    stop=40,
     rand_seed=42,
 )
 sim.run(verbose=0)
@@ -54,11 +57,11 @@ Assembling multiple modules requires passing them all to the constructor:
 ```{python}
 sim2 = ss.Sim(
     n_agents=1000,
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    networks=ss.RandomNet(n_contacts=10),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
     demographics=[ss.Births(pars=dict(birth_rate=20)), ss.Deaths(pars=dict(death_rate=15))],
     start=0,
-    stop=50,
+    stop=40,
     rand_seed=42,
 )
 sim2.run(verbose=0)

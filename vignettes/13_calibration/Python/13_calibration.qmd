@@ -24,13 +24,16 @@ import numpy as np
 import pylab as pl
 
 # Generate "truth" with known beta
+n_contacts = 10
+beta = 0.5 / n_contacts  # = 0.05
+
 true_sim = ss.Sim(
     n_agents=1000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     dt=1.0,
     start=0,
-    stop=200,
+    stop=40,
     rand_seed=42,
     verbose=0,
 )
@@ -46,15 +49,15 @@ print(f"Peak prevalence: {max(target_prev):.4f}")
 We'll try different beta values and compare the fit.
 
 ```{python}
-betas = [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10]
+betas = [0.01, 0.02, 0.03, 0.05, 0.07, 0.08, 0.10]
 losses = []
 
 for beta in betas:
     sim = ss.Sim(
         n_agents=1000,
-        networks=ss.RandomNet(n_contacts=10),
+        networks=ss.RandomNet(n_contacts=n_contacts),
         diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
-        dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+        dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
     )
     sim.run()
 
@@ -80,9 +83,9 @@ pl.show()
 best_beta = betas[np.argmin(losses)]
 best_sim = ss.Sim(
     n_agents=1000,
-    networks=ss.RandomNet(n_contacts=10),
+    networks=ss.RandomNet(n_contacts=n_contacts),
     diseases=ss.SIR(beta=best_beta, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 best_sim.run()
 

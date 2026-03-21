@@ -21,13 +21,16 @@ demonstrating births, deaths, and aging using the Starsim framework.
 import starsim as ss
 import numpy as np
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_base = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     dt=1.0,
     start=0,
-    stop=200,
+    stop=40,
     rand_seed=42,
     verbose=0,
 )
@@ -42,12 +45,12 @@ print(f"Population (no demographics): {int(n_alive_base[0])} → {int(n_alive_ba
 ```{python}
 sim_demo = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     demographics=[ss.Births(birth_rate=20), ss.Deaths(death_rate=15)],
     dt=1.0,
     start=0,
-    stop=200,
+    stop=40,
     rand_seed=42,
     verbose=0,
 )
@@ -77,19 +80,19 @@ pl.show()
 ```{python}
 sim_grow = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     demographics=[ss.Births(birth_rate=30), ss.Deaths(death_rate=10)],
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_grow.run()
 
 sim_decline = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     demographics=[ss.Births(birth_rate=10), ss.Deaths(death_rate=30)],
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_decline.run()
 

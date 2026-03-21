@@ -25,15 +25,17 @@ using Starsim
 using Plots
 
 # Create components explicitly
-net = RandomNet(n_contacts=10)
-disease = SIR(beta=0.1, dur_inf=4.0, init_prev=0.02)
+n_contacts = 10
+beta = 0.5 / n_contacts
+net = RandomNet(n_contacts=n_contacts)
+disease = SIR(beta=beta, dur_inf=4.0, init_prev=0.02)
 
 sim = Sim(
     n_agents = 1_000,
     networks = net,
     diseases = disease,
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -45,15 +47,19 @@ run!(sim)
 You can pass a vector of networks. Each gets a unique name:
 
 ```{julia}
+n_contacts_hh = 4
+n_contacts_work = 8
+beta = 0.5 / (n_contacts_hh + n_contacts_work)
+
 sim_multi = Sim(
     n_agents = 1_000,
     networks = [
-        RandomNet(name=:household, n_contacts=4),
-        RandomNet(name=:workplace, n_contacts=8),
+        RandomNet(name=:household, n_contacts=n_contacts_hh),
+        RandomNet(name=:workplace, n_contacts=n_contacts_work),
     ],
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -69,14 +75,17 @@ The `dt` parameter sets the timestep. With `dt=1`, each step is 1 day.
 
 ```{julia}
 # Compare dt=1 (daily) vs dt=0.5 (twice daily)
-sim1 = Sim(n_agents=1000, networks=RandomNet(n_contacts=10),
-    diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.02),
-    dt=1.0, stop=200.0, rand_seed=42, verbose=0)
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim1 = Sim(n_agents=1000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.02),
+    dt=1.0, stop=40.0, rand_seed=42, verbose=0)
 run!(sim1)
 
-sim2 = Sim(n_agents=1000, networks=RandomNet(n_contacts=10),
-    diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.02),
-    dt=0.5, stop=200.0, rand_seed=42, verbose=0)
+sim2 = Sim(n_agents=1000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.02),
+    dt=0.5, stop=40.0, rand_seed=42, verbose=0)
 run!(sim2)
 
 p1 = get_result(sim1, :sir, :prevalence)

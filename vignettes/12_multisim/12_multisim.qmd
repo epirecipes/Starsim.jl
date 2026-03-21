@@ -20,12 +20,15 @@ Stochastic simulations produce different outcomes each run. `MultiSim` runs mult
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 base = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )

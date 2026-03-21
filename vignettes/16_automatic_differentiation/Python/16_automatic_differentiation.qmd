@@ -28,13 +28,15 @@ import matplotlib.pyplot as plt
 ## Basic sensitivity analysis
 
 ```{python}
+n_contacts = 10
+
 def run_sir_with_beta(beta, seed=42, n_agents=1000):
     """Run SIR simulation with given beta and return results."""
     sim = ss.Sim(
         n_agents=n_agents,
         diseases=dict(type='sir', init_prev=0.01, beta=beta, dur_inf=4.0),
-        networks=dict(type='random', n_contacts=10),
-        start=0, stop=200, dt=1.0,
+        networks=dict(type='random', n_contacts=n_contacts),
+        start=0, stop=40, dt=1.0,
         rand_seed=seed,
     )
     sim.run(verbose=0)
@@ -48,7 +50,7 @@ def sensitivity_fd(beta0, h=1e-3, seed=42, n_agents=1000, summary=np.max):
     return (summary(prev_plus) - summary(prev_minus)) / (2 * h)
 
 
-dsdb = sensitivity_fd(0.05)
+dsdb = sensitivity_fd(0.5 / n_contacts)
 print(f"∂(max prevalence)/∂(beta) = {dsdb:.2f}")
 ```
 
@@ -56,11 +58,12 @@ print(f"∂(max prevalence)/∂(beta) = {dsdb:.2f}")
 
 ```{python}
 h = 1e-3
-prev_plus = run_sir_with_beta(0.05 + h)
-prev_minus = run_sir_with_beta(0.05 - h)
+beta = 0.5 / n_contacts
+prev_plus = run_sir_with_beta(beta + h)
+prev_minus = run_sir_with_beta(beta - h)
 ts = (prev_plus - prev_minus) / (2 * h)
 
-prev = run_sir_with_beta(0.05)
+prev = run_sir_with_beta(beta)
 
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5), sharex=True)
 ax1.plot(prev, label='Prevalence', linewidth=2)
@@ -78,7 +81,7 @@ plt.show()
 ## Parameter sweep
 
 ```{python}
-betas = np.arange(0.01, 0.16, 0.01)
+betas = np.arange(0.005, 0.105, 0.005)
 max_prevs = []
 sensitivities = []
 
@@ -109,8 +112,8 @@ plt.show()
 target_sim = ss.Sim(
     n_agents=1000,
     diseases=dict(type='sir', init_prev=0.01, beta=0.08, dur_inf=4.0),
-    networks=dict(type='random', n_contacts=10),
-    start=0, stop=200, dt=1.0,
+    networks=dict(type='random', n_contacts=n_contacts),
+    start=0, stop=40, dt=1.0,
     rand_seed=1,
 )
 target_sim.run(verbose=0)
@@ -123,7 +126,7 @@ def calib_objective(beta):
     return (np.max(prev) - target_prev) ** 2
 
 h = 1e-3
-x0 = 0.05
+x0 = 0.5 / n_contacts
 obj = calib_objective(x0)
 grad = (calib_objective(x0 + h) - calib_objective(x0 - h)) / (2 * h)
 print(f"Objective at beta=0.05: {obj:.6f}")

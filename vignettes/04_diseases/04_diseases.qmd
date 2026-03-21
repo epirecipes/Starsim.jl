@@ -22,12 +22,15 @@ The classic SIR model. Recovered individuals gain permanent immunity.
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_sir = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -53,10 +56,10 @@ In SIS, infected individuals return to the susceptible state — there is no las
 ```{julia}
 sim_sis = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIS(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -80,10 +83,10 @@ SEIR adds a latent (exposed) period before individuals become infectious. This d
 ```{julia}
 sim_seir = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SEIR(beta=0.05, dur_exp=2.0, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SEIR(beta=beta, dur_exp=2.0, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -130,14 +133,14 @@ The transmission rate `beta` and infectious duration `dur_inf` are key drivers o
 ### Varying beta
 
 ```{julia}
-betas = [0.02, 0.05, 0.10]
+betas = [0.01, 0.05, 0.10]
 p = plot(xlabel="Day", ylabel="Prevalence", title="Effect of Beta on SIR")
 
 for (i, b) in enumerate(betas)
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
         diseases=SIR(beta=b, dur_inf=4.0, init_prev=0.01),
-        dt=1.0, stop=200.0, rand_seed=42, verbose=0,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -154,9 +157,9 @@ p = plot(xlabel="Day", ylabel="Prevalence", title="Effect of Infectious Duration
 
 for d in durations
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
-        diseases=SIR(beta=0.05, dur_inf=d, init_prev=0.01),
-        dt=1.0, stop=200.0, rand_seed=42, verbose=0,
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=d, init_prev=0.01),
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -172,10 +175,10 @@ The `p_death` parameter sets the probability of death upon infection.
 ```{julia}
 sim_lethal = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01, p_death=0.02),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01, p_death=0.02),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -196,13 +199,13 @@ Starsim supports running multiple diseases in the same simulation. Each disease 
 ```{julia}
 sim_multi = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
+    networks = RandomNet(n_contacts=n_contacts),
     diseases = [
         SIR(name=:flu, beta=0.08, dur_inf=3.0, init_prev=0.01),
         SIS(name=:cold, beta=0.05, dur_inf=3.0, init_prev=0.02),
     ],
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )

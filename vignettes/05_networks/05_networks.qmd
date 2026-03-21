@@ -33,12 +33,15 @@ The most common network. Each agent forms approximately `n_contacts` contacts pe
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_random = Sim(
     n_agents = 2_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -53,12 +56,15 @@ println("RandomNet peak prevalence: $(round(maximum(prev_random), digits=4))")
 Contacts are assigned once and remain fixed. This mimics household or long-term contacts.
 
 ```{julia}
+n_contacts_static = 10
+beta_static = 0.5 / n_contacts_static
+
 sim_static = Sim(
     n_agents = 2_000,
-    networks = StaticNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = StaticNet(n_contacts=n_contacts_static),
+    diseases = SIR(beta=beta_static, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -78,7 +84,7 @@ sim_mf = Sim(
     networks = MFNet(mean_dur=200.0, participation_rate=0.8),
     diseases = SIR(beta=0.3, dur_inf=20.0, init_prev=0.05),
     dt = 1.0,
-    stop = 365.0 * 5,
+    stop = 200.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -93,12 +99,15 @@ println("MFNet peak prevalence: $(round(maximum(prev_mf), digits=4))")
 `MixingPool` uses mass-action-style contact where everyone can potentially contact everyone. The `contact_rate` scales the effective number of contacts.
 
 ```{julia}
+n_contacts_pool = 10
+beta_pool = 0.5 / n_contacts_pool
+
 sim_pool = Sim(
     n_agents = 2_000,
-    networks = MixingPool(contact_rate=10.0),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = MixingPool(contact_rate=n_contacts_pool),
+    diseases = SIR(beta=beta_pool, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -131,10 +140,13 @@ Starsim.jl provides `to_graph` and `to_adjacency_matrix` for analyzing network s
 using Graphs
 
 # Initialize a simulation to generate a network snapshot
+n_contacts_graph = 6
+beta_graph = 0.5 / n_contacts_graph
+
 sim_graph = Sim(
     n_agents = 500,
-    networks = StaticNet(n_contacts=6),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = StaticNet(n_contacts=n_contacts_graph),
+    diseases = SIR(beta=beta_graph, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
     stop = 10.0,
     rand_seed = 42,
@@ -175,15 +187,19 @@ println("Largest component size: $(maximum(length.(cc)))")
 Combine networks to represent different contact layers (e.g., household + workplace).
 
 ```{julia}
+n_contacts_hh = 4
+n_contacts_work = 8
+beta_layers = 0.5 / (n_contacts_hh + n_contacts_work)
+
 sim_layers = Sim(
     n_agents = 3_000,
     networks = [
-        RandomNet(name=:household, n_contacts=4),
-        RandomNet(name=:workplace, n_contacts=8),
+        RandomNet(name=:household, n_contacts=n_contacts_hh),
+        RandomNet(name=:workplace, n_contacts=n_contacts_work),
     ],
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    diseases = SIR(beta=beta_layers, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -206,10 +222,11 @@ contacts = [4, 10, 20]
 p = plot(xlabel="Day", ylabel="Prevalence", title="Effect of Contact Number")
 
 for nc in contacts
+    beta_nc = 0.5 / nc
     sim = Sim(
         n_agents=2_000, networks=RandomNet(n_contacts=nc),
-        diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
-        dt=1.0, stop=200.0, rand_seed=42, verbose=0,
+        diseases=SIR(beta=beta_nc, dur_inf=4.0, init_prev=0.01),
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)

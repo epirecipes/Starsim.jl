@@ -22,12 +22,15 @@ First, we run an SIR simulation without any intervention as a reference.
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_base = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -54,11 +57,11 @@ routine = RoutineDelivery(product=vaccine, prob=0.01, disease_name=:sir)
 
 sim_routine = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     interventions = routine,
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -82,11 +85,11 @@ campaign = CampaignDelivery(
 
 sim_campaign = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     interventions = campaign,
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -140,10 +143,10 @@ for eff in efficacies
     vx = Vx(efficacy=eff)
     delivery = RoutineDelivery(product=vx, prob=0.01, disease_name=:sir)
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
-        diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
         interventions=delivery,
-        dt=1.0, stop=200.0, rand_seed=42, verbose=0,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -163,10 +166,10 @@ for pr in probs
     vx = Vx(efficacy=0.9)
     delivery = RoutineDelivery(product=vx, prob=pr, disease_name=:sir)
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
-        diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
         interventions=delivery,
-        dt=1.0, stop=200.0, rand_seed=42, verbose=0,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -188,11 +191,11 @@ combined = [
 
 sim_combined = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     interventions = combined,
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )

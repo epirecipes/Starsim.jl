@@ -24,11 +24,14 @@ import starsim as ss
 import numpy as np
 import pylab as pl
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_random = ss.Sim(
     n_agents=2_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_random.run()
 
@@ -39,11 +42,14 @@ print(f"RandomNet peak prevalence: {max(prev_random):.4f}")
 ## MixingPool: frequency-dependent mixing
 
 ```{python}
+n_contacts_pool = 10
+beta_pool = 0.5 / n_contacts_pool
+
 sim_pool = ss.Sim(
     n_agents=2_000,
-    networks=ss.MixingPool(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.MixingPool(n_contacts=n_contacts_pool),
+    diseases=ss.SIR(beta=beta_pool, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_pool.run()
 
@@ -58,7 +64,7 @@ sim_mf = ss.Sim(
     n_agents=2_000,
     networks=ss.MFNet(duration=200, participation=ss.bernoulli(p=0.8)),
     diseases=ss.SIR(beta=0.3, dur_inf=20, init_prev=0.05),
-    dt=1.0, start=0, stop=365*5, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
 )
 sim_mf.run()
 
@@ -82,14 +88,18 @@ pl.show()
 ## Multiple networks
 
 ```{python}
+n_contacts_hh = 4
+n_contacts_work = 8
+beta_layers = 0.5 / (n_contacts_hh + n_contacts_work)
+
 sim_layers = ss.Sim(
     n_agents=3_000,
     networks=[
-        ss.RandomNet(name='household', n_contacts=4),
-        ss.RandomNet(name='workplace', n_contacts=8),
+        ss.RandomNet(name='household', n_contacts=n_contacts_hh),
+        ss.RandomNet(name='workplace', n_contacts=n_contacts_work),
     ],
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    diseases=ss.SIR(beta=beta_layers, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_layers.run()
 
@@ -112,10 +122,11 @@ contacts = [4, 10, 20]
 
 pl.figure(figsize=(10, 6))
 for nc in contacts:
+    beta_nc = 0.5 / nc
     sim = ss.Sim(
         n_agents=2_000, networks=ss.RandomNet(n_contacts=nc),
-        diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-        dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+        diseases=ss.SIR(beta=beta_nc, dur_inf=4, init_prev=0.01),
+        dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
     )
     sim.run()
     prev = sim.results.sir.prevalence.values

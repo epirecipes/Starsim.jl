@@ -26,12 +26,15 @@ First, we generate "truth" by running a simulation with known parameters.
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts  # = 0.05
+
 true_sim = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 200.0,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -47,7 +50,7 @@ println("Peak prevalence: $(round(maximum(target_prev), digits=4))")
 Before automated calibration, let's see how different beta values compare.
 
 ```{julia}
-betas = [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10]
+betas = [0.01, 0.02, 0.03, 0.05, 0.07, 0.08, 0.10]
 losses = Float64[]
 tvec = 0:length(target_prev)-1
 
@@ -57,9 +60,9 @@ p = plot(tvec, target_prev, lw=3, color=:black, ls=:dash, label="Target",
 for beta in betas
     sim = Sim(
         n_agents = 1_000,
-        networks = RandomNet(n_contacts=10),
+        networks = RandomNet(n_contacts=n_contacts),
         diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
-        dt = 1.0, stop = 200.0, rand_seed = 42, verbose = 0,
+        dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -85,9 +88,9 @@ vline!([0.05], color=:red, ls=:dash, label="True beta")
 calib = Calibration(
     sim = Sim(
         n_agents = 1_000,
-        networks = RandomNet(n_contacts=10),
-        diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
-        dt = 1.0, stop = 200.0, rand_seed = 42, verbose = 0,
+        networks = RandomNet(n_contacts=n_contacts),
+        diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
     ),
     calib_pars = [
         CalibPar(:beta; low=0.01, high=0.15, module_name=:sir),
@@ -110,9 +113,9 @@ run!(calib; verbose=1)
 ```{julia}
 best_sim = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
+    networks = RandomNet(n_contacts=n_contacts),
     diseases = SIR(beta=calib.best_pars[:beta], dur_inf=4.0, init_prev=0.01),
-    dt = 1.0, stop = 200.0, rand_seed = 42, verbose = 0,
+    dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
 )
 run!(best_sim)
 

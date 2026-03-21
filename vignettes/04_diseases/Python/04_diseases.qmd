@@ -24,11 +24,14 @@ import starsim as ss
 import numpy as np
 import pylab as pl
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_sir = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_sir.run()
 
@@ -53,9 +56,9 @@ pl.show()
 ```{python}
 sim_sis = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIS(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIS(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_sis.run()
 
@@ -129,9 +132,9 @@ class SEIR(ss.SIR):
 
 sim_seir = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=SEIR(beta=0.05, dur_exp=2, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=SEIR(beta=beta, dur_exp=2, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_seir.run()
 
@@ -174,14 +177,14 @@ pl.show()
 ## Varying beta
 
 ```{python}
-betas = [0.02, 0.05, 0.10]
+betas = [0.01, 0.05, 0.10]
 
 pl.figure(figsize=(10, 6))
 for b in betas:
     sim = ss.Sim(
-        n_agents=1_000, networks=ss.RandomNet(n_contacts=10),
+        n_agents=1_000, networks=ss.RandomNet(n_contacts=n_contacts),
         diseases=ss.SIR(beta=b, dur_inf=4, init_prev=0.01),
-        dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+        dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
     )
     sim.run()
     prev = sim.results.sir.prevalence.values
@@ -199,12 +202,12 @@ pl.show()
 ```{python}
 sim_multi = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
+    networks=ss.RandomNet(n_contacts=n_contacts),
     diseases=[
         ss.SIR(name='flu', beta=0.08, dur_inf=3, init_prev=0.01),
-        ss.SIS(name='cold', beta=0.05, dur_inf=3, init_prev=0.02),
+        ss.SIS(name='cold', beta=0.03, dur_inf=3, init_prev=0.02),
     ],
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_multi.run()
 

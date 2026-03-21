@@ -22,12 +22,15 @@ First, a standard SIR simulation with constant transmission for comparison.
 using Starsim
 using Plots
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_base = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,
-    stop = 365.0 * 2,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -51,11 +54,11 @@ seasonal = Seasonality(disease_name=:sir, amplitude=0.5, peak_day=0)
 
 sim_seasonal = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     connectors = seasonal,
     dt = 1.0,
-    stop = 365.0 * 2,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )
@@ -101,10 +104,10 @@ p = plot(xlabel="Day", ylabel="Prevalence", title="Effect of Seasonality Amplitu
 for amp in amplitudes
     conn = Seasonality(disease_name=:sir, amplitude=amp, peak_day=0.0)
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
-        diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
         connectors=conn,
-        dt=1.0, stop=365.0*2, rand_seed=42, verbose=0,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -122,10 +125,10 @@ p = plot(xlabel="Day", ylabel="Prevalence", title="Effect of Peak Day")
 for pd in peak_days
     conn = Seasonality(disease_name=:sir, amplitude=0.5, peak_day=pd)
     sim = Sim(
-        n_agents=1_000, networks=RandomNet(n_contacts=10),
-        diseases=SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
         connectors=conn,
-        dt=1.0, stop=365.0*2, rand_seed=42, verbose=0,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
     )
     run!(sim)
     prev = get_result(sim, :sir, :prevalence)
@@ -140,17 +143,17 @@ Seasonality is especially visible with SIS models, where endemic transmission pr
 
 ```{julia}
 sim_sis_base = Sim(
-    n_agents=1_000, networks=RandomNet(n_contacts=10),
-    diseases=SIS(beta=0.05, dur_inf=4.0, init_prev=0.01),
-    dt=1.0, stop=365.0*3, rand_seed=42, verbose=0,
+    n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt=1.0, stop=40.0, rand_seed=42, verbose=0,
 )
 run!(sim_sis_base)
 
 sim_sis_seasonal = Sim(
-    n_agents=1_000, networks=RandomNet(n_contacts=10),
-    diseases=SIS(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
     connectors=Seasonality(disease_name=:sis, amplitude=0.5, peak_day=0.0),
-    dt=1.0, stop=365.0*3, rand_seed=42, verbose=0,
+    dt=1.0, stop=40.0, rand_seed=42, verbose=0,
 )
 run!(sim_sis_seasonal)
 
@@ -171,7 +174,7 @@ Connectors are applied per-disease. Here we run two diseases with seasonality on
 ```{julia}
 sim_multi = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
+    networks = RandomNet(n_contacts=n_contacts),
     diseases = [
         SIS(name=:flu, beta=0.05, dur_inf=3.0, init_prev=0.01),
         SIS(name=:rsv, beta=0.04, dur_inf=4.0, init_prev=0.01),
@@ -181,7 +184,7 @@ sim_multi = Sim(
         Seasonality(disease_name=:rsv, amplitude=0.4, peak_day=60.0),
     ],
     dt = 1.0,
-    stop = 365.0 * 3,
+    stop = 40.0,
     rand_seed = 42,
     verbose = 0,
 )

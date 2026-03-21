@@ -24,11 +24,14 @@ import starsim as ss
 import numpy as np
 import pylab as pl
 
+n_contacts = 10
+beta = 0.5 / n_contacts
+
 sim_base = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_base.run()
 
@@ -44,10 +47,10 @@ routine = ss.routine_vx(product=vaccine, prob=0.01)
 
 sim_routine = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     interventions=routine,
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_routine.run()
 
@@ -66,10 +69,10 @@ campaign = ss.campaign_vx(
 
 sim_campaign = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     interventions=campaign,
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_campaign.run()
 
@@ -103,10 +106,10 @@ for eff in efficacies:
     vx = ss.simple_vx(efficacy=eff)
     delivery = ss.routine_vx(product=vx, prob=0.01)
     sim = ss.Sim(
-        n_agents=1_000, networks=ss.RandomNet(n_contacts=10),
-        diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+        n_agents=1_000, networks=ss.RandomNet(n_contacts=n_contacts),
+        diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
         interventions=delivery,
-        dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+        dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
     )
     sim.run()
     prev = sim.results.sir.prevalence.values
@@ -130,10 +133,10 @@ combined = [
 
 sim_combined = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     interventions=combined,
-    dt=1.0, start=0, stop=200, rand_seed=42, verbose=0,
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
 )
 sim_combined.run()
 
