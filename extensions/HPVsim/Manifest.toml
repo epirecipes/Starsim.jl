@@ -329,7 +329,7 @@ uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
 version = "1.13.1"
 
 [[deps.HPVsim]]
-deps = ["Distributions", "JSON3", "OrderedCollections", "Random", "StableRNGs", "Starsim", "Statistics"]
+deps = ["Distributions", "JSON", "JSON3", "OrderedCollections", "Random", "StableRNGs", "Starsim", "Statistics"]
 path = "."
 uuid = "e5f6a7b8-c9d0-1234-ef01-567890123456"
 version = "0.1.0"
@@ -841,7 +841,7 @@ uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
 version = "1.0.4"
 
 [[deps.Starsim]]
-deps = ["Catlab", "DataFrames", "Distributions", "FunctionWrappers", "Graphs", "JSON3", "LinearAlgebra", "Metal", "OrderedCollections", "Printf", "PyCall", "Random", "RecipesBase", "Serialization", "SparseArrays", "StableRNGs", "Statistics"]
+deps = ["Catlab", "DataFrames", "Distributions", "FunctionWrappers", "Graphs", "JSON", "JSON3", "LinearAlgebra", "Metal", "OrderedCollections", "Printf", "PyCall", "Random", "RecipesBase", "Serialization", "SparseArrays", "StableRNGs", "Statistics"]
 path = "../.."
 uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 version = "0.1.0"

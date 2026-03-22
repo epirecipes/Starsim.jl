@@ -114,9 +114,9 @@ Standard SIR (Susceptible → Infected → Recovered) disease model.
 # Keyword arguments
 - `name::Symbol` — disease name (default `:sir`)
 - `init_prev::Real` — initial prevalence (default 0.01)
-- `beta::Union{Real, Dict}` — transmission rate (default 0.05)
-- `dur_inf::Real` — mean duration of infection in years (default 1/52)
-- `p_death::Real` — probability of death given infection (default 0.0)
+- `beta::Union{Real, Dict}` — transmission rate (default 0.1)
+- `dur_inf::Real` — mean duration of infection in years (default 6.0)
+- `p_death::Real` — probability of death given infection (default 0.01)
 
 # Example
 ```julia
@@ -141,9 +141,9 @@ end
 function SIR(;
     name::Symbol = :sir,
     init_prev::Real = 0.01,
-    beta::Union{Real, Dict} = 0.05,
-    dur_inf::Real = 1/52,  # ~1 week by default
-    p_death::Real = 0.0,
+    beta::Union{Real, Dict} = 0.1,
+    dur_inf::Real = 6.0,
+    p_death::Real = 0.01,
     recovery_dist::Symbol = :lognormal,
 )
     inf = InfectionData(name; init_prev=init_prev, beta=beta, label="SIR")
@@ -524,7 +524,7 @@ function SIS(;
     name::Symbol = :sis,
     init_prev::Real = 0.01,
     beta::Union{Real, Dict} = 0.05,
-    dur_inf::Real = 1/52,
+    dur_inf::Real = 10.0,
     p_death::Real = 0.0,
 )
     inf = InfectionData(name; init_prev=init_prev, beta=beta, label="SIS")

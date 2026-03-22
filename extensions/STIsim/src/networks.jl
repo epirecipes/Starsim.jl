@@ -440,17 +440,17 @@ function _match_pairs(net::StructuredSexual, sim)
     isempty(ind_m) && return (Int[], Int[])
     isempty(ind_f) && return (Int[], Int[])
 
-    # Trim upper end
+    # Trim upper end — Python uses bisect_left + [:cutoff] which EXCLUDES
+    # elements >= boundary.  searchsortedfirst gives the first index with
+    # value >= boundary, so we keep [1:cutoff-1] to match Python's behavior.
     oldest_desired_now = desired_ages[ind_f[end]]
     oldest_male_now = m_ages[ind_m[end]]
     if oldest_male_now > oldest_desired_now
         cutoff = searchsortedfirst(view(m_ages, ind_m), oldest_desired_now)
-        cutoff > length(ind_m) && (cutoff = length(ind_m))
-        ind_m = ind_m[1:cutoff]
+        ind_m = ind_m[1:max(cutoff - 1, 0)]
     elseif oldest_desired_now > oldest_male_now
         cutoff = searchsortedfirst(view(desired_ages, ind_f), oldest_male_now)
-        cutoff > length(ind_f) && (cutoff = length(ind_f))
-        ind_f = ind_f[1:cutoff]
+        ind_f = ind_f[1:max(cutoff - 1, 0)]
     end
 
     isempty(ind_m) && return (Int[], Int[])

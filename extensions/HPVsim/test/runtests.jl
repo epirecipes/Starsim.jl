@@ -585,7 +585,7 @@ using Statistics: mean
     @testset "Duration-based model" begin
         sim = HPVSim(
             genotypes    = SIMPLE_GENOTYPES,
-            n_agents     = 2000,
+            n_agents     = 5000,
             start        = 2000.0,
             stop         = 2020.0,
             dt           = 0.25,

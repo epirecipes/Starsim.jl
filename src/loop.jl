@@ -207,6 +207,7 @@ function run_loop!(loop::Loop, sim; verbose::Int=1)
 
     for ti in 1:loop.npts
         loop.ti = ti
+        sim.t.ti = ti  # Keep Timeline in sync with loop
 
         if verbose >= 2
             year = sim.pars.start + (ti - 1) * sim.pars.dt

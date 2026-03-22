@@ -174,8 +174,10 @@ Convenience constructor for a multi-genotype HPV simulation.
 - `rand_seed::Int` — RNG seed (default 0)
 - `use_immunity::Bool` — include HPVImmunityConnector (default true)
 - `use_demographics::Bool` — include births/deaths (default true, matching Python hpvsim)
-- `birth_rate::Real` — crude birth rate per 1000/year (default 35.0, Nigeria-like)
-- `death_rate::Real` — base death rate per 1000/year (default 10.0; age-specific increases apply above age 50)
+- `location::Union{Symbol,Nothing}` — location for demographics (e.g. :nigeria); uses location-specific data
+- `birth_rate::Real` — crude birth rate per 1000/year (default 35.0; ignored when location is set)
+- `death_rate::Real` — base death rate per 1000/year (default 10.0; ignored when location is set)
+- `dt_demog::Real` — demographic time step in years (default 1.0, matching Python)
 - `immunity_kwargs` — keyword arguments for HPVImmunityConnector
 - `network` — custom network (default: HPVNet())
 - `interventions` — optional interventions
@@ -192,8 +194,10 @@ function HPVSim(;
     rand_seed::Int = 0,
     use_immunity::Bool = true,
     use_demographics::Bool = true,
+    location::Union{Symbol,Nothing} = nothing,
     birth_rate::Real = 35.0,
     death_rate::Real = 10.0,
+    dt_demog::Real = 1.0,
     immunity_kwargs::Dict = Dict(),
     network = nothing,
     interventions = nothing,
@@ -245,8 +249,17 @@ function HPVSim(;
             push!(all_demographics, demographics)
         end
     elseif use_demographics
-        push!(all_demographics, Starsim.Births(birth_rate=Float64(birth_rate)))
-        push!(all_demographics, HPVDeaths(base_rate=Float64(death_rate)))
+        if location !== nothing
+            # Use location-specific demographics (matching Python hpvsim exactly)
+            push!(all_demographics, HPVLocationDemographics(;
+                location=location,
+                dt_demog=Float64(dt_demog),
+            ))
+        else
+            # Fallback to simplified demographics
+            push!(all_demographics, Starsim.Births(birth_rate=Float64(birth_rate)))
+            push!(all_demographics, HPVDeaths(base_rate=Float64(death_rate)))
+        end
     end
 
     sim = Starsim.Sim(;

@@ -13,7 +13,7 @@ resolution even when the sim/network dt is weekly. This Julia implementation gat
 step_state!, step!, and update_results! to only execute on monthly boundaries.
 """
 
-const _HIV_DISEASE_DT = 1.0 / 12.0  # Monthly
+const _HIV_DISEASE_DT = 1.0 / 12.0  # Monthly (in years)
 
 """Sample from a lognormal specified by mean and std (matching Python ss.lognorm_ex)."""
 function _lognorm_ex_sample(rng, mean_val::Float64, std_val::Float64)
@@ -22,6 +22,11 @@ function _lognorm_ex_sample(rng, mean_val::Float64, std_val::Float64)
     sigma2 = log(1.0 + cv^2)
     mu = log(mean_val) - sigma2 / 2.0
     return exp(mu + sqrt(sigma2) * randn(rng))
+end
+
+"""Convert sim step index to monthly disease step index (matching Python's disease ti)."""
+function _sim_ti_to_monthly(sim_ti::Int, sim_dt::Float64)
+    return floor(Int, Float64(sim_ti) * sim_dt * 12.0)
 end
 
 """Check if the current sim step is a monthly boundary for the HIV disease."""
@@ -237,42 +242,53 @@ function Starsim.init_post!(d::HIV, sim)
         d.cd4_latent.raw[u] = max(100.0, d.cd4_latent_mean + randn(d.rng) * 50.0)
     end
 
-    # Seed initial infections with past ti (matching Python: uniform(-120, -5))
+    # Seed initial infections with Bernoulli sampling (matching Python: init_prev.filter())
     n = length(active)
-    n_infect = max(1, Int(round(d.infection.dd.init_prev * n)))
-    n_infect = min(n_infect, n)
     if d.infection.dd.init_prev <= 0.0
         return d
     end
-
-    infect_uids = Starsim.UIDs(active[randperm(d.rng, n)[1:n_infect]])
+    # Stochastic Bernoulli seeding — each agent independently has probability init_prev
+    infect_list = Int[]
+    for u in active
+        if rand(d.rng) < d.infection.dd.init_prev
+            push!(infect_list, u)
+        end
+    end
+    if isempty(infect_list)
+        push!(infect_list, active[1])  # At least one
+    end
+    infect_uids = Starsim.UIDs(infect_list)
     dt = sim.pars.dt
     # Python: ss.uniform(low=-10*12, high=-5) → -120 to -5 in MONTHLY timesteps
-    # Convert to weekly: -10 years = -10/dt, -5 months = -5/(12*dt) (approx)
-    ti_init_low  = round(Int, -10.0 / dt)   # -10 years in weekly steps
-    ti_init_high = round(Int, -5.0 / 12.0 / dt)  # -5 months in weekly steps
+    # We pass ti as sim step, _do_hiv_infection! converts to monthly internally
+    # So generate monthly offsets and convert back to sim steps for the ti argument
+    ti_monthly_low  = -10 * 12  # -120 months
+    ti_monthly_high = -5        # -5 months
     for u in infect_uids.values
-        ti_init = rand(d.rng, ti_init_low:ti_init_high)
+        monthly_offset = rand(d.rng, ti_monthly_low:ti_monthly_high)
+        # Convert monthly offset to sim step: monthly_offset months = monthly_offset/12 years = monthly_offset/12/dt sim steps
+        ti_init = round(Int, Float64(monthly_offset) / 12.0 / dt)
         _do_hiv_infection!(d, sim, u, 0, ti_init)
     end
 
     # Advance initial cases to correct disease stage based on past infection time
+    # ti values are now in monthly disease steps; compare against monthly step 0
     for u in infect_uids.values
         # Acute → Latent (if past ti_latent)
-        if d.acute.raw[u] && d.ti_latent.raw[u] <= 1.0
+        if d.acute.raw[u] && d.ti_latent.raw[u] <= 0.0
             d.acute.raw[u] = false
             d.latent.raw[u] = true
             d.infection.rel_trans.raw[u] = 1.0
-            d.cd4.raw[u] = d.cd4_latent.raw[u]  # CD4 drops to latent level
+            d.cd4.raw[u] = d.cd4_latent.raw[u]
         end
         # Latent → Falling (if past ti_falling)
-        if d.latent.raw[u] && d.ti_falling.raw[u] <= 1.0
+        if d.latent.raw[u] && d.ti_falling.raw[u] <= 0.0
             d.latent.raw[u] = false
             d.falling.raw[u] = true
             d.infection.rel_trans.raw[u] = d.rel_trans_falling
         end
         # Falling → Dead (if past ti_zero)
-        if d.falling.raw[u] && d.ti_zero.raw[u] <= 1.0
+        if d.falling.raw[u] && d.ti_zero.raw[u] <= 0.0
             d.infection.infected.raw[u] = false
             d.falling.raw[u] = false
             sim.people.alive.raw[u] = false
@@ -293,9 +309,10 @@ function Starsim.step_state!(d::HIV, sim)
 
     md = Starsim.module_data(d)
     ti = md.t.ti
-    ti_f = Float64(ti)
+    sim_dt = sim.pars.dt
+    # Monthly disease step index (matching Python's self.ti for disease)
+    monthly_ti = Float64(_sim_ti_to_monthly(ti, sim_dt))
     active = sim.people.auids.values
-    dt = sim.pars.dt
     new_deaths = 0
 
     acute_raw   = d.acute.raw
@@ -304,53 +321,66 @@ function Starsim.step_state!(d::HIV, sim)
     infected_raw = d.infection.infected.raw
     on_art_raw  = d.on_art.raw
 
+    # --- Phase 1: State transitions (matching Python order) ---
+    # All ti_* values are in monthly disease steps
     @inbounds for u in active
-        if !infected_raw[u]
-            continue
-        end
+        infected_raw[u] || continue
 
         # Acute → Latent
-        if acute_raw[u] && d.ti_latent.raw[u] <= ti_f
+        if acute_raw[u] && d.ti_latent.raw[u] <= monthly_ti
             acute_raw[u] = false
             latent_raw[u] = true
         end
 
         # Latent → Falling
-        if latent_raw[u] && !on_art_raw[u] && d.ti_falling.raw[u] <= ti_f
+        if latent_raw[u] && !on_art_raw[u] && d.ti_falling.raw[u] <= monthly_ti
             latent_raw[u] = false
             falling_raw[u] = true
         end
+    end
 
-        # Reset and update rel_trans every timestep (matching Python)
-        # Python: rel_trans[:] = 1, then *= N(6,0.5) for acute, *= N(8,0.5) for AIDS (cd4<200)
+    # --- Phase 2: CD4 updates (BEFORE rel_trans, matching Python) ---
+    # All durations are in monthly steps → decline_per_step is per month → fires monthly → correct
+    @inbounds for u in active
+        infected_raw[u] || continue
+
+        if on_art_raw[u]
+            _update_cd4_art!(d, u, monthly_ti, sim_dt)
+        elseif acute_raw[u]
+            _update_cd4_acute!(d, u, monthly_ti)
+        elseif latent_raw[u]
+            # Python: self.cd4[untreated_latent.uids] = self.cd4_latent[...]
+            d.cd4.raw[u] = d.cd4_latent.raw[u]
+        elseif falling_raw[u]
+            _update_cd4_falling!(d, u, monthly_ti)
+        end
+
+        # Track nadir (for anyone not on ART)
+        if !on_art_raw[u] && d.cd4.raw[u] < d.cd4_nadir.raw[u]
+            d.cd4_nadir.raw[u] = d.cd4.raw[u]
+        end
+    end
+
+    # --- Phase 3: Update rel_trans (AFTER CD4, matching Python update_transmission) ---
+    @inbounds for u in active
+        infected_raw[u] || continue
+
         if acute_raw[u]
             d.infection.rel_trans.raw[u] = d.rel_trans_acute + randn(d.rng) * d.rel_trans_acute_std
-        elseif d.cd4.raw[u] < 200.0  # AIDS condition, matching Python self.aids
+        elseif d.cd4.raw[u] < 200.0  # AIDS condition
             d.infection.rel_trans.raw[u] = d.rel_trans_falling + randn(d.rng) * d.rel_trans_falling_std
         else
             d.infection.rel_trans.raw[u] = 1.0
         end
+    end
 
-        # Update CD4
-        if on_art_raw[u]
-            _update_cd4_art!(d, u, ti_f, dt)
-        elseif acute_raw[u]
-            _update_cd4_acute!(d, u, ti_f)
-        elseif falling_raw[u]
-            _update_cd4_falling!(d, u, ti_f)
-        end
-
-        # Track nadir
-        if d.cd4.raw[u] < d.cd4_nadir.raw[u]
-            d.cd4_nadir.raw[u] = d.cd4.raw[u]
-        end
+    # --- Phase 4: Deaths (matching Python order) ---
+    @inbounds for u in active
+        infected_raw[u] || continue
 
         # CD4-based mortality (matching Python's make_p_hiv_death)
-        # NOTE: step fires monthly, so use monthly dt for probability conversion
         if !on_art_raw[u] && sim.people.alive.raw[u]
             cd4_val = d.cd4.raw[u]
-            # CD4 bins: [≥1000, 500-999, 350-499, 200-349, 50-199, <50]
-            # Annual rates: [0.003, 0.003, 0.005, 0.01, 0.05, 0.300]
             annual_rate = if cd4_val >= 1000.0
                 0.003
             elseif cd4_val >= 500.0
@@ -372,8 +402,8 @@ function Starsim.step_state!(d::HIV, sim)
             end
         end
 
-        # AIDS death (CD4 reaches zero)
-        if d.include_aids_deaths && !on_art_raw[u] && d.ti_dead.raw[u] <= ti_f
+        # AIDS death (CD4 reaches zero) — ti_dead is in monthly steps
+        if d.include_aids_deaths && !on_art_raw[u] && d.ti_dead.raw[u] <= monthly_ti
             Starsim.request_death!(sim.people, Starsim.UIDs([u]), ti)
             new_deaths += 1
         end
@@ -388,32 +418,36 @@ function Starsim.step_state!(d::HIV, sim)
     return d
 end
 
-"""Update CD4 during acute phase — linear decline from cd4_start to cd4_latent."""
-function _update_cd4_acute!(d::HIV, u::Int, ti_f::Float64)
+"""Update CD4 during acute phase — linear decline from cd4_start to cd4_latent.
+ti_acute and ti_latent are in monthly disease steps, so dur is in months.
+Fires once per month → decline_per_step is per month → correct."""
+function _update_cd4_acute!(d::HIV, u::Int, monthly_ti::Float64)
     acute_start = d.ti_acute.raw[u]
     acute_end = d.ti_latent.raw[u]
-    dur = acute_end - acute_start
+    dur = acute_end - acute_start  # in monthly steps
     dur <= 0.0 && return
-    decline_per_ts = (d.cd4_start.raw[u] - d.cd4_latent.raw[u]) / dur
-    d.cd4.raw[u] = max(1.0, d.cd4.raw[u] - decline_per_ts)
+    decline_per_step = (d.cd4_start.raw[u] - d.cd4_latent.raw[u]) / dur
+    d.cd4.raw[u] = max(1.0, d.cd4.raw[u] - decline_per_step)
     return
 end
 
-"""Update CD4 during falling phase — linear decline to 0."""
-function _update_cd4_falling!(d::HIV, u::Int, ti_f::Float64)
+"""Update CD4 during falling phase — linear decline to ~0.
+ti_falling and ti_zero are in monthly disease steps, so dur is in months.
+Fires once per month → decline_per_step is per month → correct."""
+function _update_cd4_falling!(d::HIV, u::Int, monthly_ti::Float64)
     falling_start = d.ti_falling.raw[u]
     falling_end = d.ti_zero.raw[u]
-    dur = falling_end - falling_start
+    dur = falling_end - falling_start  # in monthly steps
     dur <= 0.0 && return
-    decline_per_ts = d.cd4_latent.raw[u] / dur
-    d.cd4.raw[u] = max(0.0, d.cd4.raw[u] - decline_per_ts)
+    cd4_end = 1.0  # Match Python: cd4_end = 1 to avoid divide by zero
+    decline_per_step = (d.cd4_latent.raw[u] - cd4_end) / dur
+    d.cd4.raw[u] = max(cd4_end, d.cd4.raw[u] - decline_per_step)
     return
 end
 
 """Update CD4 on ART — logistic growth toward cd4_start."""
-function _update_cd4_art!(d::HIV, u::Int, ti_f::Float64, dt::Float64)
+function _update_cd4_art!(d::HIV, u::Int, monthly_ti::Float64, sim_dt::Float64)
     cd4_max = 1000.0
-    cd4_healthy = 500.0
     cd4_current = d.cd4.raw[u]
     growth = d.art_cd4_growth
     # Logistic growth: dCD4/dt = growth * CD4 * (1 - CD4/cd4_max)
@@ -460,10 +494,26 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
     p2 = edges.p2
     eb = edges.beta
     ea = edges.acts
-    infected_raw    = d.infection.infected.raw
-    susceptible_raw = d.infection.susceptible.raw
-    rel_trans_raw   = d.infection.rel_trans.raw
-    rel_sus_raw     = d.infection.rel_sus.raw
+
+    # SNAPSHOT state arrays before edge loop (matching Python: rel_trans/rel_sus
+    # are computed once before the loop; newly infected agents do NOT become
+    # infectious within the same step)
+    n_agents = length(d.infection.infected.raw)
+    infected_snap    = copy(d.infection.infected.raw)
+    susceptible_snap = copy(d.infection.susceptible.raw)
+    rel_trans_snap   = copy(d.infection.rel_trans.raw)
+    rel_sus_snap     = copy(d.infection.rel_sus.raw)
+
+    # Python also masks: rel_trans = infectious * rel_trans, rel_sus = susceptible * rel_sus
+    @inbounds for u in 1:n_agents
+        if !infected_snap[u]
+            rel_trans_snap[u] = 0.0
+        end
+        if !susceptible_snap[u]
+            rel_sus_snap[u] = 0.0
+        end
+    end
+
     on_art_raw      = d.on_art.raw
     female_raw      = sim.people.female.raw
     rng = d.rng
@@ -480,25 +530,26 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
         edge_beta = eb[i]
         acts = ea[i]
 
-        if infected_raw[src] && susceptible_raw[trg]
+        if infected_snap[src] && susceptible_snap[trg]
             beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[src] ? (1.0 - art_eff) : 1.0
-            # Match Python: net_beta first, then multiply by rel_trans/rel_sus
             net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-            p = clamp(rel_trans_raw[src] * trans_mult * rel_sus_raw[trg] * net_beta_val, 0.0, 1.0)
+            p = clamp(rel_trans_snap[src] * trans_mult * rel_sus_snap[trg] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, trg, src, ti)
+                susceptible_snap[trg] = false  # Prevent re-infection from other edges (matches Python dedup)
                 new_infections += 1
             end
         end
 
-        if bidir && infected_raw[trg] && susceptible_raw[src]
+        if bidir && infected_snap[trg] && susceptible_snap[src]
             beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[trg] ? (1.0 - art_eff) : 1.0
             net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-            p = clamp(rel_trans_raw[trg] * trans_mult * rel_sus_raw[src] * net_beta_val, 0.0, 1.0)
+            p = clamp(rel_trans_snap[trg] * trans_mult * rel_sus_snap[src] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, src, trg, ti)
+                susceptible_snap[src] = false  # Prevent re-infection from other edges (matches Python dedup)
                 new_infections += 1
             end
         end
@@ -506,17 +557,27 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
     return new_infections
 end
 
-"""Infect a single agent with HIV and set full prognosis."""
+"""Infect a single agent with HIV and set full prognosis.
+
+All disease timing (ti_acute, ti_latent, ti_falling, ti_zero, ti_dead) is stored
+in MONTHLY disease timestep indices, matching Python stisim where dt='month'.
+Durations are sampled in months:
+  dur_acute  ~ lognorm(mean=3mo, std=1mo),  truncated to int months
+  dur_latent ~ lognorm(mean=120mo, std=36mo), truncated to int months
+  dur_falling~ lognorm(mean=36mo, std=12mo), truncated to int months
+"""
 function _do_hiv_infection!(d::HIV, sim, target::Int, source::Int, ti::Int)
-    dt = sim.pars.dt
+    sim_dt = sim.pars.dt
+    # Convert sim step ti to monthly disease step
+    monthly_ti = _sim_ti_to_monthly(ti, sim_dt)
 
     d.infection.susceptible.raw[target] = false
     d.infection.infected.raw[target] = true
-    d.infection.ti_infected.raw[target] = Float64(ti)
+    d.infection.ti_infected.raw[target] = Float64(ti)  # sim-step for infection log
 
     # Acute phase
     d.acute.raw[target] = true
-    d.ti_acute.raw[target] = Float64(ti)
+    d.ti_acute.raw[target] = Float64(monthly_ti)
     d.infection.rel_trans.raw[target] = d.rel_trans_acute + randn(d.rng) * d.rel_trans_acute_std
 
     # CD4 at infection start
@@ -526,21 +587,22 @@ function _do_hiv_infection!(d::HIV, sim, target::Int, source::Int, ti::Int)
     cd4_lat = max(100.0, d.cd4_latent_mean + randn(d.rng) * 50.0)
     d.cd4_latent.raw[target] = cd4_lat
 
-    # Duration of acute (in timesteps) — Python: ss.lognorm_ex(months(3), months(1))
-    dur_acute_yr = _lognorm_ex_sample(d.rng, d.dur_acute, d.dur_acute * 1/3)
-    dur_acute_ts = max(1.0, dur_acute_yr / dt)
-    d.ti_latent.raw[target] = Float64(ti) + dur_acute_ts
+    # Duration of acute in MONTHS — Python: ss.lognorm_ex(months(3), months(1))
+    # d.dur_acute is in years (0.25), convert mean to months for sampling
+    dur_acute_months = _lognorm_ex_sample(d.rng, d.dur_acute * 12.0, d.dur_acute * 12.0 / 3.0)
+    dur_acute_int = max(1, floor(Int, dur_acute_months))
+    d.ti_latent.raw[target] = Float64(monthly_ti + dur_acute_int)
 
-    # Duration of latent — Python: ss.lognorm_ex(years(10), years(3))
-    dur_latent_yr = _lognorm_ex_sample(d.rng, d.dur_latent, d.dur_latent * 0.3)
-    dur_latent_ts = max(1.0, dur_latent_yr / dt)
-    d.ti_falling.raw[target] = d.ti_latent.raw[target] + dur_latent_ts
+    # Duration of latent in MONTHS — Python: ss.lognorm_ex(years(10), years(3))
+    dur_latent_months = _lognorm_ex_sample(d.rng, d.dur_latent * 12.0, d.dur_latent * 12.0 * 0.3)
+    dur_latent_int = max(1, floor(Int, dur_latent_months))
+    d.ti_falling.raw[target] = d.ti_latent.raw[target] + Float64(dur_latent_int)
 
-    # Duration of falling — Python: ss.lognorm_ex(years(3), years(1))
-    dur_falling_yr = _lognorm_ex_sample(d.rng, d.dur_falling, d.dur_falling * 1/3)
-    dur_falling_ts = max(1.0, dur_falling_yr / dt)
-    d.ti_zero.raw[target] = d.ti_falling.raw[target] + dur_falling_ts
-    d.ti_dead.raw[target] = d.ti_zero.raw[target]  # Death when CD4 reaches 0
+    # Duration of falling in MONTHS — Python: ss.lognorm_ex(years(3), years(1))
+    dur_falling_months = _lognorm_ex_sample(d.rng, d.dur_falling * 12.0, d.dur_falling * 12.0 / 3.0)
+    dur_falling_int = max(1, floor(Int, dur_falling_months))
+    d.ti_zero.raw[target] = d.ti_falling.raw[target] + Float64(dur_falling_int)
+    d.ti_dead.raw[target] = d.ti_zero.raw[target]
 
     push!(d.infection.infection_sources, (target, source, ti))
     return
@@ -609,7 +671,9 @@ function Starsim.update_results!(d::HIV, sim)
     md.results[:n_diagnosed][ti]   = Float64(n_diag)
 
     n_total = Float64(length(active))
-    md.results[:prevalence][ti] = n_total > 0.0 ? n_inf / n_total : 0.0
+    # HIV overrides BaseSTI prevalence back to total population:
+    # "Recalculate prevalence so it's for the whole population"
+    md.results[:prevalence][ti] = n_total > 0.0 ? Float64(n_inf) / n_total : 0.0
     md.results[:mean_cd4][ti]   = n_cd4 > 0 ? cd4_sum / n_cd4 : 0.0
     return d
 end

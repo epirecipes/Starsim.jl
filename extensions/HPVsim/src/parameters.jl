@@ -114,9 +114,14 @@ Uses `scipy.stats.lognorm(s=par2, scale=par1)` convention.
 function sample_lognormal_duration(rng, par1::Real, par2::Real)
     par1 <= 0.0 && return 0.0
     par2 <= 0.0 && return Float64(par1)
-    # scipy lognorm(s=sigma, scale=scale): underlying normal has μ=log(scale), σ=s
-    mu = log(Float64(par1))
-    sigma = Float64(par2)
+    # Python hpvsim: par1 = MEAN of lognormal, par2 = STD of lognormal
+    # Python converts to underlying normal: mu = log(par1^2 / sqrt(par2^2 + par1^2))
+    #                                       sigma = sqrt(log(par2^2/par1^2 + 1))
+    # Values are in YEARS — divide by dt to get timesteps (matching Python: date_clearance = t + dur/dt)
+    p1 = Float64(par1)
+    p2 = Float64(par2)
+    mu    = log(p1^2 / sqrt(p2^2 + p1^2))
+    sigma = sqrt(log(p2^2 / p1^2 + 1))
     return rand(rng, Distributions.LogNormal(mu, sigma))
 end
 
@@ -514,12 +519,43 @@ const DEFAULT_BETA = 0.25
 """Male-to-female transmission multiplier relative to female-to-male."""
 const M2F_TRANS_RATIO = 3.69
 
-"""Default cross-immunity matrix entries (matching Python hpvsim)."""
+"""Male infection duration parameters (Python: dur_infection_male).
+
+Males clear HPV in about 1 year (par1=1, par2=1 → nearly deterministic ~1 year).
+These are passed to sample_lognormal_duration which returns duration in years.
+"""
+const DUR_INFECTION_MALE_PAR1 = 1.0  # mean (years)
+const DUR_INFECTION_MALE_PAR2 = 1.0  # std (years) — with par2≈par1, distribution is tight
+
+"""Default age-structured initial HPV prevalence (from Python hpvsim defaults.py).
+
+Age brackets are upper bounds; prevalence applies up to that age.
+Males and females have different initial prevalence profiles reflecting
+epidemiological data from developing countries.
+"""
+const DEFAULT_INIT_PREV_AGE_BRACKETS = Float64[12, 17, 24, 34, 44, 64, 80, 150]
+const DEFAULT_INIT_PREV_MALE   = Float64[0.0, 0.25, 0.6, 0.25, 0.05, 0.01, 0.0005, 0.0]
+const DEFAULT_INIT_PREV_FEMALE = Float64[0.0, 0.35, 0.7, 0.25, 0.05, 0.01, 0.0005, 0.0]
+
+"""Default cross-immunity matrix entries for susceptibility (matching Python hpvsim)."""
 const DEFAULT_CROSS_IMMUNITY = Dict{Symbol, Float64}(
     :imm_init => 0.35,  # Mean initial immunity level (Python: imm_init beta(0.35, 0.025))
     :own_hr   => 0.90,  # Same genotype for grouped types (Python: own_imm_hr)
     :partial  => 0.50,  # Same risk group (Python: cross_imm_sus_high)
     :cross    => 0.30,  # Different risk group (Python: cross_imm_sus_med)
+)
+
+"""Default cross-immunity matrix entries for severity (matching Python hpvsim).
+
+Severity immunity (`sev_imm`) reduces the duration of reinfections via
+`dur_precin *= (1 - sev_imm)`. Uses `cell_imm` (always set on clearance,
+no seroconversion gating) rather than `peak_imm`.
+"""
+const DEFAULT_CROSS_IMMUNITY_SEV = Dict{Symbol, Float64}(
+    :cell_imm_init => 0.25,  # Mean cell immunity level (Python: cell_imm_init beta(0.25, 0.025))
+    :own_hr        => 0.90,  # Same genotype for grouped types
+    :partial       => 0.70,  # Same risk group (Python: cross_imm_sev_high)
+    :cross         => 0.50,  # Different risk group (Python: cross_imm_sev_med)
 )
 
 """Default vaccination parameters."""

@@ -13,7 +13,7 @@ Convenience constructor for an STI simulation.
 - `n_agents::Int` — number of agents (default 5000)
 - `start::Real` — start year (default 2000.0)
 - `stop::Real` — stop year (default 2050.0)
-- `dt::Real` — timestep in years (default 1/52, weekly)
+- `dt::Real` — timestep in years (default 1/12, monthly — matches Python stisim)
 - `rand_seed::Int` — RNG seed (default 0)
 - `network` — custom network (default: StructuredSexual())
 - `connectors` — coinfection connectors
@@ -25,7 +25,7 @@ function STISim(;
     n_agents::Int = 5000,
     start::Real = 2000.0,
     stop::Real = 2050.0,
-    dt::Real = 1/52,
+    dt::Real = 1/12,  # Monthly, matching Python stisim default
     rand_seed::Int = 0,
     network = nothing,
     connectors = nothing,

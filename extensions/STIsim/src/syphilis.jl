@@ -274,32 +274,42 @@ function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Fl
     new_infections = 0
     bidir = Starsim.network_data(net).bidirectional
     p1 = edges.p1; p2 = edges.p2; eb = edges.beta; ea = edges.acts
-    inf_raw = d.infection.infected.raw
-    sus_raw = d.infection.susceptible.raw
-    rt_raw  = d.infection.rel_trans.raw
-    rs_raw  = d.infection.rel_sus.raw
+
+    # SNAPSHOT state arrays before edge loop (matching Python's synchronous update)
+    n_agents = length(d.infection.infected.raw)
+    inf_snap = copy(d.infection.infected.raw)
+    sus_snap = copy(d.infection.susceptible.raw)
+    rt_snap  = copy(d.infection.rel_trans.raw)
+    rs_snap  = copy(d.infection.rel_sus.raw)
+
+    @inbounds for u in 1:n_agents
+        if !inf_snap[u];  rt_snap[u] = 0.0; end
+        if !sus_snap[u]; rs_snap[u] = 0.0; end
+    end
+
     female_raw = sim.people.female.raw
     rng = d.rng
     dt = sim.pars.dt
 
     @inbounds for i in 1:length(edges)
         src = p1[i]; trg = p2[i]; edge_beta = eb[i]; acts = ea[i]
-        if inf_raw[src] && sus_raw[trg]
+        if inf_snap[src] && sus_snap[trg]
             ba = _get_directional_beta(female_raw[src], female_raw[trg], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
-            # Match Python: net_beta first, then multiply by rel_trans/rel_sus
             net_beta_val = (1.0 - (1.0 - ba)^acts) * edge_beta
-            p = clamp(rt_raw[src] * rs_raw[trg] * net_beta_val, 0.0, 1.0)
+            p = clamp(rt_snap[src] * rs_snap[trg] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_syph_infection!(d, sim, trg, src, ti)
+                sus_snap[trg] = false  # Prevent re-infection (matches Python dedup)
                 new_infections += 1
             end
         end
-        if bidir && inf_raw[trg] && sus_raw[src]
+        if bidir && inf_snap[trg] && sus_snap[src]
             ba = _get_directional_beta(female_raw[trg], female_raw[src], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
             net_beta_val = (1.0 - (1.0 - ba)^acts) * edge_beta
-            p = clamp(rt_raw[trg] * rs_raw[src] * net_beta_val, 0.0, 1.0)
+            p = clamp(rt_snap[trg] * rs_snap[src] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_syph_infection!(d, sim, src, trg, ti)
+                sus_snap[src] = false  # Prevent re-infection (matches Python dedup)
                 new_infections += 1
             end
         end
@@ -420,7 +430,7 @@ function Starsim.update_results!(d::Syphilis, sim)
     end
     @inbounds for u in active
         age_u = age_raw[u]
-        if age_u >= 15.0 && age_u < 50.0 && (debut_raw === nothing || age_u > debut_raw[u])
+        if age_u >= 15.0 && age_u <= 50.0 && (debut_raw === nothing || age_u > debut_raw[u])
             n_sa += 1
             n_inf_sa += d.infection.infected.raw[u]
         end

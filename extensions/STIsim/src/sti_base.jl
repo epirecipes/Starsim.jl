@@ -108,6 +108,10 @@ mutable struct SEIS <: Starsim.AbstractInfection
     dur_presymp_m::Float64
     dur_presymp_m_std::Float64
 
+    # Age range for prevalence computation (matching Python)
+    age_lo::Float64
+    age_hi::Float64
+
     rng::StableRNG
 end
 
@@ -139,6 +143,8 @@ function SEIS(;
     dur_presymp_f_std::Real     = -1.0,
     dur_presymp_m::Real         = -1.0,
     dur_presymp_m_std::Real     = -1.0,
+    age_lo::Real                = 15.0,
+    age_hi::Real                = 65.0,
     label::String      = "SEIS STI",
 )
     inf = Starsim.InfectionData(name; init_prev=Float64(init_prev), beta=Float64(beta_m2f), label=label)
@@ -175,6 +181,8 @@ function SEIS(;
         Float64(dur_presymp_f_std),
         Float64(dur_presymp_m),
         Float64(dur_presymp_m_std),
+        Float64(age_lo),
+        Float64(age_hi),
         StableRNG(0),
     )
 end
@@ -445,6 +453,11 @@ function _do_seis_infection!(d::SEIS, sim, target::Int, source::Int, ti::Int)
     d.exposed.raw[target] = true
     d.ti_exposed.raw[target] = Float64(ti)
 
+    # Wipe previous dates (matching Python's wipe_dates)
+    d.ti_symptomatic.raw[target] = Inf
+    d.ti_clearance.raw[target] = Inf
+    d.ti_pid.raw[target] = Inf
+
     # Time to become infectious (exposed → infected)
     if d.dur_exp > 0.0
         dur_exp_ts = d.dur_exp / dt
@@ -558,8 +571,20 @@ function Starsim.update_results!(d::SEIS, sim)
     md.results[:n_symptomatic][ti] = Float64(n_symp)
     md.results[:n_pid][ti]         = Float64(n_pid)
 
+    # Prevalence among adults (matching Python's age_range)
+    age_raw = sim.people.age.raw
+    age_lo = d.age_lo
+    age_hi = d.age_hi
+    n_adults = 0; n_inf_adults = 0
+    @inbounds for u in active
+        a = age_raw[u]
+        if a >= age_lo && a <= age_hi
+            n_adults += 1
+            n_inf_adults += inf_raw[u]
+        end
+    end
     n_total = Float64(length(active))
-    md.results[:prevalence][ti] = n_total > 0.0 ? (n_inf + n_exp) / n_total : 0.0
+    md.results[:prevalence][ti] = n_adults > 0 ? Float64(n_inf_adults) / Float64(n_adults) : 0.0
     md.results[:incidence][ti]  = n_total > 0.0 ? Float64(n_exp) / n_total : 0.0
     return d
 end

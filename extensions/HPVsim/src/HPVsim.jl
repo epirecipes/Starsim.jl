@@ -35,13 +35,19 @@ include("networks.jl")
 # Interventions (depends on HPVGenotype, HPVImmunityConnector)
 include("interventions.jl")
 
+# Location-specific demographic data
+include("nigeria_data.jl")
+
+# Location-specific demographics (births + deaths matching Python hpvsim)
+include("demographics.jl")
+
 # Convenience simulation constructor
 include("sim.jl")
 
 export HPVGenotype, GenotypeParams, GenotypeDef,
        HPVImmunityConnector,
        HPVVaccination, HPVScreening, HPVTherapeuticVaccine,
-       HPVDeaths,
+       HPVDeaths, HPVLocationDemographics,
        TreatmentType, ABLATION, EXCISION, GENERIC,
        get_treatment_efficacy,
        HPVSexualNet, HPVNet, HPVSim,
