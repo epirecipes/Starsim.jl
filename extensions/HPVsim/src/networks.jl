@@ -484,7 +484,11 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
             p_nb = d2 / (d1 + d2)
             max(dt, Float64(rand(rng, NegativeBinomial(d2, p_nb))))
         else
-            max(dt, rand(rng, LogNormal(log(d1), log(d2))))
+            # Python hpvsim: par1=mean, par2=std of the lognormal distribution
+            # Convert to underlying normal parameters (matching hpu.sample)
+            mu    = log(d1^2 / sqrt(d2^2 + d1^2))
+            sigma = sqrt(log(d2^2 / d1^2 + 1))
+            max(dt, rand(rng, LogNormal(mu, sigma)))
         end
 
         # Age-scale acts ONCE at creation (matching Python: age_scale_acts in make_contacts)
