@@ -17,7 +17,6 @@ Convenience constructor for a family planning simulation.
 - `location::Symbol` — location for demographic data (default :generic)
 - `pars::Union{FPPars, Nothing}` — custom parameters
 - `use_contraception::Bool` — include contraception (default false)
-- `initiation_rate::Float64` — annual contraception initiation rate (default 0.10)
 - `analyzers` — optional analyzers
 """
 function FPSim(;
@@ -29,7 +28,6 @@ function FPSim(;
     location::Symbol = :generic,
     pars::Union{FPPars, Nothing} = nothing,
     use_contraception::Bool = false,
-    initiation_rate::Float64 = 0.10,
     initial_cpr::Float64 = -1.0,  # -1 = auto-detect from location data
     analyzers = nothing,
     kwargs...,
@@ -46,33 +44,25 @@ function FPSim(;
     interventions = Starsim.AbstractIntervention[]
     if use_contraception
         mm = load_method_mix(; location=location, methods=methods)
+
         # Auto-detect initial CPR from location data
         cpr_val = initial_cpr
         if cpr_val < 0
             cpr_val = _load_initial_cpr(location)
         end
-        # Derive initiation rate to sustain the target CPR at equilibrium
-        # Equilibrium: init_rate * (1 - CPR) = avg_disc_rate * CPR
-        # => init_rate = avg_disc_rate * CPR / (1 - CPR)
-        avg_disc = 0.0
-        n_active = 0
-        for (i, name) in enumerate(mm.method_names)
-            idx = findfirst(m -> m.name == name, methods)
-            if idx !== nothing
-                avg_disc += mm.mix_probs[i] * methods[idx].discontinuation
-                n_active += 1
-            end
-        end
-        target_init = if cpr_val > 0 && cpr_val < 1 && avg_disc > 0
-            avg_disc * cpr_val / (1 - cpr_val)
-        else
-            initiation_rate
-        end
+
+        # Load switching matrix and contra use coefficients
+        loc_dir = joinpath(DATA_DIR, string(location))
+        sm = load_switch_matrix(loc_dir, methods)
+        coefs = load_contra_use_coefs(loc_dir)
+
         push!(interventions, Contraception(;
             methods=methods,
             method_mix=mm,
-            initiation_rate=target_init,
+            switch_matrix=sm,
+            contra_use_coefs=coefs,
             initial_cpr=cpr_val,
+            prob_use_intercept=0.8,  # Calibrated to match Python fpsim CPR
         ))
     end
 

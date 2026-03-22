@@ -135,7 +135,7 @@ function Starsim.step!(a::FPAnalyzer, sim)
             @inbounds for u in active
                 !sim.people.female.raw[u] && continue
                 # Identify women who just gave birth (postpartum with months_pp near 0)
-                if fpmod.postpartum.raw[u] && fpmod.months_postpartum.raw[u] < sim.pars.dt * MPY + 0.5
+                if fpmod.postpartum.raw[u] && fpmod.months_postpartum.raw[u] < 0.5
                     age = sim.people.age.raw[u]
                     bin = asfr_bin(age)
                     if bin > 0

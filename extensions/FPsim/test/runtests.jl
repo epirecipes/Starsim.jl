@@ -79,8 +79,8 @@ using StableRNGs
         @test any(m -> m.name == :none, methods)
         @test any(m -> m.name == :pill, methods)
         @test any(m -> m.name == :iud, methods)
-        @test any(m -> m.name == :implant, methods)
-        @test any(m -> m.name == :condom, methods)
+        @test any(m -> m.name == :impl, methods)
+        @test any(m -> m.name == :cond, methods)
     end
 
     @testset "Method efficacy ordering" begin
@@ -95,7 +95,7 @@ using StableRNGs
     end
 
     @testset "Method struct" begin
-        m = FPsim.Method(:custom, "Custom", 0.95, 0.15, true)
+        m = FPsim.Method(:custom, "Custom", "Custom", 0.95, true, :lnorm, 2.0, 0.5, Float64[])
         @test m.name == :custom
         @test m.efficacy == 0.95
         @test m.modern == true
@@ -363,7 +363,7 @@ using StableRNGs
     end
 
     @testset "Contraception with custom methods" begin
-        custom = [FPsim.Method(:custom, "Custom", 0.99, 0.05, true)]
+        custom = [FPsim.Method(:custom, "Custom", "Custom", 0.99, true, :lnorm, 2.0, 0.5, Float64[])]
         c = Contraception(; methods=custom)
         @test length(c.methods) == 1
         @test c.methods[1].name == :custom
@@ -425,16 +425,16 @@ using StableRNGs
         @test avg_modern > avg_trad
     end
 
-    @testset "Method discontinuation rates" begin
+    @testset "Method efficacy and duration parameters" begin
         methods = load_methods()
         for m in methods
             @test 0.0 <= m.efficacy <= 1.0
-            @test 0.0 <= m.discontinuation <= 1.0
+            @test m.dur_par1 >= 0.0
         end
-        # Implant should have lowest discontinuation among modern methods
-        implant = first(m for m in methods if m.name == :implant)
+        # Implant should have higher efficacy than pill
+        impl = first(m for m in methods if m.name == :impl)
         pill = first(m for m in methods if m.name == :pill)
-        @test implant.discontinuation < pill.discontinuation
+        @test impl.efficacy > pill.efficacy
     end
 
     # ========================================================================
@@ -857,7 +857,7 @@ using StableRNGs
         # Run with contraception
         sim_yes = FPSim(;
             n_agents=1000, start=2000.0, stop=2010.0, dt=1/12,
-            rand_seed=42, use_contraception=true, initiation_rate=0.3,
+            rand_seed=42, use_contraception=true,
         )
         Starsim.run!(sim_yes; verbose=0)
         fpmod_yes = first(c for (_, c) in sim_yes.connectors if c isa FPmod)
@@ -1023,7 +1023,7 @@ using StableRNGs
         sim = FPSim(;
             n_agents=500, start=2000.0, stop=2010.0, dt=1/12,
             rand_seed=123, location=:kenya,
-            use_contraception=true, initiation_rate=0.15,
+            use_contraception=true,
             analyzers=[FPAnalyzer()],
         )
         Starsim.run!(sim; verbose=0)

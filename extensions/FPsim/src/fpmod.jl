@@ -40,6 +40,8 @@ mutable struct FPmod <: Starsim.AbstractConnector
     # Contraception
     on_contra::Starsim.StateVector{Bool, Vector{Bool}}
     method_idx::Starsim.StateVector{Float64, Vector{Float64}}
+    ti_contra::Starsim.StateVector{Float64, Vector{Float64}}     # Timestep of next contra update
+    ever_used_contra::Starsim.StateVector{Bool, Vector{Bool}}    # Has ever used contraception
 
     # Sexual debut
     sexual_debut::Starsim.StateVector{Bool, Vector{Bool}}
@@ -88,6 +90,8 @@ function FPmod(;
         # Contraception
         Starsim.BoolState(:on_contra; default=false, label="On contraception"),
         Starsim.FloatState(:method_idx; default=0.0, label="Method index"),
+        Starsim.FloatState(:ti_contra; default=Inf, label="Next contra update"),
+        Starsim.BoolState(:ever_used_contra; default=false, label="Ever used contra"),
         # Sexual debut
         Starsim.BoolState(:sexual_debut; default=false, label="Sexual debut"),
         Starsim.FloatState(:fated_debut; default=Inf, label="Fated debut age"),
@@ -120,8 +124,8 @@ function Starsim.init_pre!(c::FPmod, sim)
     all_states = [
         c.sexually_active, c.pregnant, c.ti_pregnant, c.postpartum,
         c.breastfeeding, c.parity, c.months_postpartum, c.gestation_month,
-        c.ti_birth, c.on_contra, c.method_idx, c.sexual_debut,
-        c.fated_debut, c.personal_fecundity, c.fertile, c.lam,
+        c.ti_birth, c.on_contra, c.method_idx, c.ti_contra, c.ever_used_contra,
+        c.sexual_debut, c.fated_debut, c.personal_fecundity, c.fertile, c.lam,
         c.dur_pregnancy_state, c.dur_breastfeed_state,
     ]
     for s in all_states
@@ -255,6 +259,7 @@ function Starsim.step!(c::FPmod, sim)
                 if rand(c.rng) < mis_rate
                     n_miscarriages += 1
                     _end_pregnancy!(c, u)
+                    c.ti_contra.raw[u] = Float64(ti) + 1.0  # Re-evaluate contra
                     continue
                 end
             end
@@ -308,6 +313,8 @@ function Starsim.step!(c::FPmod, sim)
 
                 c.pregnant.raw[u] = false
                 c.gestation_month.raw[u] = 0.0
+                # Trigger postpartum contraception evaluation
+                c.ti_contra.raw[u] = Float64(ti) + 1.0
             end
             continue
         end
@@ -362,8 +369,6 @@ function Starsim.step!(c::FPmod, sim)
                 c.lam.raw[u] = false
             end
 
-            # If still under LAM protection, skip conception
-            c.lam.raw[u] && continue
         end
 
         # ---- 4. Conception ----
@@ -440,10 +445,16 @@ function Starsim.step!(c::FPmod, sim)
         new_uids = Starsim.grow!(sim.people, births_to_add)
         # Initialize newborn states
         for u in new_uids.values
-            c.fated_debut.raw[u] = draw_debut_age(c.rng, pars)
+            debut_age = draw_debut_age(c.rng, pars)
+            c.fated_debut.raw[u] = debut_age
             c.personal_fecundity.raw[u] = pars.fecundity_low +
                 rand(c.rng) * (pars.fecundity_high - pars.fecundity_low)
             c.fertile.raw[u] = rand(c.rng) >= pars.primary_infertility
+            # Set ti_contra to trigger at sexual debut
+            age = sim.people.age.raw[u]
+            years_to_debut = max(debut_age - age, 0.0)
+            steps_to_debut = max(floor(years_to_debut / dt), 0.0)
+            c.ti_contra.raw[u] = Float64(ti) + steps_to_debut
         end
     end
 
@@ -494,21 +505,24 @@ function Starsim.update_results!(c::FPmod, sim)
 end
 
 # ============================================================================
-# Contraception connector
+# Contraception connector — Python-style switching model
 # ============================================================================
 
 """
     Contraception <: AbstractIntervention
 
-Contraceptive method intervention. Assigns, switches, and discontinues
-methods for eligible women based on method mix probabilities.
+Contraceptive method intervention matching Python fpsim's SimpleChoice model.
+Uses duration-based method switching, age-specific switching matrices,
+logistic regression for probability of use, and postpartum pathways.
 """
 mutable struct Contraception <: Starsim.AbstractIntervention
     iv::Starsim.InterventionData
     methods::Vector{Method}
     method_mix::MethodMix
-    initiation_rate::Float64    # Annual probability of starting contraception for non-users
-    initial_cpr::Float64        # Initial CPR at sim start (among eligible women)
+    switch_matrix::Union{MethodSwitchMatrix, Nothing}
+    contra_use_coefs::Vector{ContraUseCoefs}  # [pp0, pp1, pp6]
+    initial_cpr::Float64
+    prob_use_intercept::Float64  # Calibration offset added to logistic regression
     rng::StableRNG
 end
 
@@ -516,14 +530,16 @@ function Contraception(;
     name::Symbol = :contraception,
     methods::Union{Vector{Method}, Nothing} = nothing,
     method_mix::Union{MethodMix, Nothing} = nothing,
-    initiation_rate::Float64 = 0.10,
+    switch_matrix::Union{MethodSwitchMatrix, Nothing} = nothing,
+    contra_use_coefs::Vector{ContraUseCoefs} = ContraUseCoefs[],
     initial_cpr::Float64 = 0.25,
+    prob_use_intercept::Float64 = 0.0,
 )
     md = Starsim.ModuleData(name; label="Contraception")
     iv = Starsim.InterventionData(md, nothing, :none)
     m = methods === nothing ? load_methods() : methods
     mm = method_mix === nothing ? DEFAULT_METHOD_MIX : method_mix
-    Contraception(iv, m, mm, initiation_rate, initial_cpr, StableRNG(0))
+    Contraception(iv, m, mm, switch_matrix, contra_use_coefs, initial_cpr, prob_use_intercept, StableRNG(0))
 end
 
 Starsim.intervention_data(c::Contraception) = c.iv
@@ -545,28 +561,56 @@ function Starsim.init_pre!(c::Contraception, sim)
 end
 
 function Starsim.init_post!(c::Contraception, sim)
-    # Seed initial contraceptive users based on method mix
     fpmod = _find_fpmod(sim)
     fpmod === nothing && return c
 
     pars = fpmod.pars
     active = sim.people.auids.values
     methods = c.methods
-    mix = c.method_mix
+    sm = c.switch_matrix
+    dt = sim.pars.dt
+    has_coefs = !isempty(c.contra_use_coefs)
 
     for u in active
         !sim.people.female.raw[u] && continue
         age = sim.people.age.raw[u]
         age < pars.method_age && continue
-        !fpmod.sexually_active.raw[u] && continue
+        age >= pars.age_limit_fecundity && continue
+        !fpmod.sexual_debut.raw[u] && continue
         fpmod.pregnant.raw[u] && continue
-        fpmod.postpartum.raw[u] && continue
 
-        # Initial uptake probability (matches location CPR data)
-        if rand(c.rng) < c.initial_cpr
-            midx = sample_method(c.rng, methods, mix)
+        # Determine initial ever-used status: use prob_use model or CPR-based estimate.
+        # In Python, ever_used_contra starts from DHS data. We approximate by using
+        # a higher ever-use rate than current use (typically ~1.5x current CPR for Kenya).
+        ever_use_rate = min(c.initial_cpr * 1.6, 0.85)
+        is_ever_user = rand(c.rng) < ever_use_rate
+        fpmod.ever_used_contra.raw[u] = is_ever_user
+
+        # Determine if currently using via prob_use model
+        will_use = false
+        if has_coefs
+            prob = compute_prob_use(c.contra_use_coefs[1], age, is_ever_user)
+            will_use = rand(c.rng) < prob
+        else
+            will_use = rand(c.rng) < c.initial_cpr
+        end
+
+        if will_use
+            midx = if sm !== nothing
+                choose_method_switching(c.rng, sm, methods, age, :none, 0)
+            else
+                sample_method(c.rng, methods, c.method_mix)
+            end
             fpmod.on_contra.raw[u] = true
+            fpmod.ever_used_contra.raw[u] = true
             fpmod.method_idx.raw[u] = Float64(midx)
+            dur = sample_duration(c.rng, methods[midx], age)
+            elapsed_frac = rand(c.rng)
+            fpmod.ti_contra.raw[u] = 1.0 + dur * (1.0 - elapsed_frac) / dt
+        else
+            dur = sample_duration(c.rng, methods[1], age)
+            elapsed_frac = rand(c.rng)
+            fpmod.ti_contra.raw[u] = 1.0 + dur * (1.0 - elapsed_frac) / dt
         end
     end
     return c
@@ -582,7 +626,9 @@ function Starsim.step!(c::Contraception, sim)
     active = sim.people.auids.values
     pars = fpmod.pars
     methods = c.methods
-    mix = c.method_mix
+    sm = c.switch_matrix
+    has_switch = sm !== nothing
+    has_coefs = !isempty(c.contra_use_coefs)
 
     n_init = 0; n_disc = 0; n_switch = 0
 
@@ -590,41 +636,102 @@ function Starsim.step!(c::Contraception, sim)
         !sim.people.female.raw[u] && continue
         age = sim.people.age.raw[u]
         age < pars.method_age && continue
-        !fpmod.sexually_active.raw[u] && continue
         fpmod.pregnant.raw[u] && continue
 
-        if fpmod.on_contra.raw[u]
-            # Discontinuation check
-            midx = Int(fpmod.method_idx.raw[u])
-            if midx >= 1 && midx <= length(methods)
-                disc_prob = prob_per_timestep(methods[midx].discontinuation, dt)
-                if rand(c.rng) < disc_prob
-                    # Most women who discontinue switch to another method (matching Python)
-                    if rand(c.rng) < mix.switch_prob
-                        new_midx = sample_method(c.rng, methods, mix)
-                        fpmod.method_idx.raw[u] = Float64(new_midx)
-                        n_switch += 1
-                    else
-                        fpmod.on_contra.raw[u] = false
-                        fpmod.method_idx.raw[u] = 0.0
-                        n_disc += 1
-                    end
-                end
+        # Determine postpartum state for this woman
+        pp_state = 0
+        if fpmod.postpartum.raw[u]
+            ti_birth = fpmod.ti_birth.raw[u]
+            months_since = fpmod.months_postpartum.raw[u]
+            steps_since = ti - ti_birth
+            if steps_since >= 0.5 && steps_since < 1.5
+                pp_state = 1  # ~1 month postpartum
+            elseif steps_since >= 5.5 && steps_since < 6.5 && !fpmod.on_contra.raw[u]
+                pp_state = 6  # ~6 months postpartum, not yet using
             end
+        end
+
+        # Check if it's time for a contraceptive decision
+        ti_contra = fpmod.ti_contra.raw[u]
+        needs_update = (Float64(ti) >= ti_contra) || (pp_state == 1) || (pp_state == 6)
+        !needs_update && continue
+
+        current_midx = Int(fpmod.method_idx.raw[u])
+        current_method_name = if current_midx >= 1 && current_midx <= length(methods)
+            methods[current_midx].name
         else
-            # Initiation check for non-users (higher rate for postpartum women)
-            base_init = prob_per_timestep(c.initiation_rate, dt)
-            # Postpartum women re-initiate faster (matching Python ti_contra mechanism)
-            init_prob = if fpmod.postpartum.raw[u] && fpmod.months_postpartum.raw[u] < 3.0
-                min(base_init * 3.0, 0.5)  # boosted initiation early postpartum
+            :none
+        end
+
+        # BTL is permanent — skip
+        if current_method_name == :btl
+            fpmod.ti_contra.raw[u] = Float64(ti) + 1000.0
+            continue
+        end
+
+        # Determine if woman will use contraception
+        will_use = false
+        if has_coefs
+            coef_idx = if pp_state == 1
+                min(2, length(c.contra_use_coefs))
+            elseif pp_state == 6
+                min(3, length(c.contra_use_coefs))
             else
-                base_init
+                1
             end
-            if rand(c.rng) < init_prob
-                midx = sample_method(c.rng, methods, mix)
-                fpmod.on_contra.raw[u] = true
-                fpmod.method_idx.raw[u] = Float64(midx)
+            prob_use = compute_prob_use(c.contra_use_coefs[coef_idx], age,
+                                        fpmod.ever_used_contra.raw[u];
+                                        intercept_offset=c.prob_use_intercept)
+            will_use = rand(c.rng) < prob_use
+        else
+            # Fallback: simple model
+            if fpmod.on_contra.raw[u]
+                will_use = true  # existing users keep using by default
+            else
+                base_rate = 0.10
+                init_prob = prob_per_timestep(base_rate, dt)
+                will_use = rand(c.rng) < init_prob
+            end
+        end
+
+        if will_use
+            # Choose method
+            new_midx = if has_switch
+                choose_method_switching(c.rng, sm, methods, age,
+                                        current_method_name, pp_state)
+            else
+                sample_method(c.rng, methods, c.method_mix)
+            end
+
+            was_on = fpmod.on_contra.raw[u]
+            fpmod.on_contra.raw[u] = true
+            fpmod.ever_used_contra.raw[u] = true
+            fpmod.method_idx.raw[u] = Float64(new_midx)
+
+            if !was_on
                 n_init += 1
+            elseif new_midx != current_midx
+                n_switch += 1
+            end
+
+            # Sample duration and schedule next update
+            dur = sample_duration(c.rng, methods[new_midx], age)
+            fpmod.ti_contra.raw[u] = Float64(ti) + dur / dt
+        else
+            # Stop using contraception
+            if fpmod.on_contra.raw[u]
+                n_disc += 1
+            end
+            fpmod.on_contra.raw[u] = false
+            fpmod.method_idx.raw[u] = 0.0
+
+            if pp_state == 1
+                # Women 1m postpartum who don't use: re-evaluate at 6m
+                fpmod.ti_contra.raw[u] = Float64(ti) + 5.0
+            else
+                # Sample duration until next re-evaluation (using "none" method)
+                dur = sample_duration(c.rng, methods[1], age)
+                fpmod.ti_contra.raw[u] = Float64(ti) + dur / dt
             end
         end
     end

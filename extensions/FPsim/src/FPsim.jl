@@ -48,8 +48,11 @@ export # Parameters
        # Locations
        load_location_data, VALID_LOCATIONS,
        # Methods
-       Method, MethodMix, load_methods, load_method_mix,
+       Method, MethodMix, MethodSwitchMatrix, ContraUseCoefs,
+       load_methods, load_method_mix, load_switch_matrix, load_contra_use_coefs,
        method_by_name, method_index, sample_method,
+       sample_duration, choose_method_switching, compute_prob_use,
+       METHOD_AGE_BINS, method_age_bin, method_age_bin_idx,
        # Connectors
        FPmod, Contraception,
        # Analyzers
