@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "4706f68446410fdb38dfa4520368cd5fa2eb017b"
+project_hash = "f0f94c072fb0f284a75699456d38b08357f36f3b"
 
 [[deps.ACSets]]
 deps = ["AlgebraicInterfaces", "Base64", "CompTime", "DataStructures", "JSON3", "MLStyle", "OrderedCollections", "PEG", "Permutations", "Pkg", "PrettyTables", "Random", "Reexport", "SHA", "StaticArrays", "StructEquality", "StructTypes", "Tables"]
@@ -329,7 +329,7 @@ uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
 version = "1.13.1"
 
 [[deps.HPVsim]]
-deps = ["Distributions", "OrderedCollections", "Random", "StableRNGs", "Starsim", "Statistics"]
+deps = ["Distributions", "JSON3", "OrderedCollections", "Random", "StableRNGs", "Starsim", "Statistics"]
 path = "."
 uuid = "e5f6a7b8-c9d0-1234-ef01-567890123456"
 version = "0.1.0"

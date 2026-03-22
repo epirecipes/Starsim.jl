@@ -1,0 +1,238 @@
+# Disease Models (Python)
+Simon Frost
+
+- [Overview](#overview)
+- [SIR: susceptible → infected →
+  recovered](#sir-susceptible--infected--recovered)
+- [SIS: susceptible → infected →
+  susceptible](#sis-susceptible--infected--susceptible)
+- [SEIR: susceptible → exposed → infected →
+  recovered](#seir-susceptible--exposed--infected--recovered)
+- [Comparing prevalence across
+  models](#comparing-prevalence-across-models)
+- [Varying beta](#varying-beta)
+- [Multiple diseases simultaneously](#multiple-diseases-simultaneously)
+
+## Overview
+
+This is the Python companion to the Julia `04_diseases` vignette,
+comparing SIR, SIS, and SEIR disease models in Starsim.
+
+## SIR: susceptible → infected → recovered
+
+``` python
+import starsim as ss
+import numpy as np
+import pylab as pl
+
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim_sir = ss.Sim(
+    n_agents=1_000,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
+)
+sim_sir.run()
+
+n_sus = sim_sir.results.sir.n_susceptible.values
+n_inf = sim_sir.results.sir.n_infected.values
+n_rec = sim_sir.results.sir.n_recovered.values
+tvec = range(len(n_sus))
+
+pl.figure(figsize=(10, 6))
+pl.plot(tvec, n_sus, label="Susceptible", lw=2, color="blue")
+pl.plot(tvec, n_inf, label="Infected", lw=2, color="red")
+pl.plot(tvec, n_rec, label="Recovered", lw=2, color="green")
+pl.xlabel("Day")
+pl.ylabel("Number of agents")
+pl.title("SIR Dynamics")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-2-output-1.png)
+
+## SIS: susceptible → infected → susceptible
+
+``` python
+sim_sis = ss.Sim(
+    n_agents=1_000,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIS(beta=beta, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
+)
+sim_sis.run()
+
+n_sus_sis = sim_sis.results.sis.n_susceptible.values
+n_inf_sis = sim_sis.results.sis.n_infected.values
+tvec = range(len(n_sus_sis))
+
+pl.figure(figsize=(10, 6))
+pl.plot(tvec, n_sus_sis, label="Susceptible", lw=2, color="blue")
+pl.plot(tvec, n_inf_sis, label="Infected", lw=2, color="red")
+pl.xlabel("Day")
+pl.ylabel("Number of agents")
+pl.title("SIS Dynamics (Endemic Equilibrium)")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-3-output-1.png)
+
+## SEIR: susceptible → exposed → infected → recovered
+
+Python starsim does not have a built-in SEIR model, so we define one as
+a custom class extending `ss.SIR`.
+
+``` python
+class SEIR(ss.SIR):
+    """Custom SEIR model extending SIR with exposed compartment."""
+
+    def __init__(self, pars=None, **kwargs):
+        super().__init__()
+        self.define_pars(
+            beta = ss.peryear(0.05),
+            init_prev = ss.bernoulli(p=0.01),
+            dur_exp = ss.lognorm_ex(2),
+            dur_inf = ss.lognorm_ex(4),
+            p_death = ss.bernoulli(p=0.01),
+        )
+        self.update_pars(pars, **kwargs)
+
+        self.define_states(
+            ss.BoolState('exposed', label='Exposed'),
+            ss.FloatArr('ti_exposed', label='Time of exposure'),
+        )
+
+    def init_results(self):
+        super().init_results()
+        # n_exposed is auto-created from BoolState 'exposed'
+
+    def step_state(self):
+        ti = self.sim.ti
+        # Exposed → Infected transitions
+        exposed_to_inf = (self.exposed & (self.ti_infected <= ti)).uids
+        self.exposed[exposed_to_inf] = False
+        self.infected[exposed_to_inf] = True
+
+        # Infected → Recovered transitions (from parent SIR)
+        recovered = (self.infected & (self.ti_recovered <= ti)).uids
+        self.infected[recovered] = False
+        self.recovered[recovered] = True
+
+    def set_prognoses(self, uids, sources=None):
+        self.susceptible[uids] = False
+        self.exposed[uids] = True
+        self.ti_exposed[uids] = self.sim.ti
+        dur_exp = self.pars.dur_exp.rvs(uids)
+        dur_inf = self.pars.dur_inf.rvs(uids)
+        self.ti_infected[uids] = self.sim.ti + dur_exp
+        self.ti_recovered[uids] = self.sim.ti + dur_exp + dur_inf
+
+    def update_results(self):
+        super().update_results()
+        # n_exposed is auto-updated from BoolState 'exposed'
+
+sim_seir = ss.Sim(
+    n_agents=1_000,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=SEIR(beta=beta, dur_exp=2, dur_inf=4, init_prev=0.01),
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
+)
+sim_seir.run()
+
+n_sus  = sim_seir.results.seir.n_susceptible.values
+n_exp  = sim_seir.results.seir.n_exposed.values
+n_inf  = sim_seir.results.seir.n_infected.values
+n_rec  = sim_seir.results.seir.n_recovered.values
+tvec = range(len(n_sus))
+
+pl.figure(figsize=(10, 6))
+pl.plot(tvec, n_sus, label="Susceptible", lw=2, color="blue")
+pl.plot(tvec, n_exp, label="Exposed", lw=2, color="orange")
+pl.plot(tvec, n_inf, label="Infected", lw=2, color="red")
+pl.plot(tvec, n_rec, label="Recovered", lw=2, color="green")
+pl.xlabel("Day")
+pl.ylabel("Number of agents")
+pl.title("SEIR Dynamics")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-4-output-1.png)
+
+## Comparing prevalence across models
+
+``` python
+prev_sir  = sim_sir.results.sir.prevalence.values
+prev_sis  = sim_sis.results.sis.prevalence.values
+prev_seir = sim_seir.results.seir.prevalence.values
+
+pl.figure(figsize=(10, 6))
+pl.plot(range(len(prev_sir)),  prev_sir,  label="SIR",  lw=2, color="blue")
+pl.plot(range(len(prev_sis)),  prev_sis,  label="SIS",  lw=2, color="red")
+pl.plot(range(len(prev_seir)), prev_seir, label="SEIR", lw=2, color="green")
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("Prevalence Comparison: SIR vs SIS vs SEIR")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-5-output-1.png)
+
+## Varying beta
+
+``` python
+betas = [0.01, 0.05, 0.10]
+
+pl.figure(figsize=(10, 6))
+for b in betas:
+    sim = ss.Sim(
+        n_agents=1_000, networks=ss.RandomNet(n_contacts=n_contacts),
+        diseases=ss.SIR(beta=b, dur_inf=4, init_prev=0.01),
+        dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
+    )
+    sim.run()
+    prev = sim.results.sir.prevalence.values
+    pl.plot(range(len(prev)), prev, label=f"β={b}", lw=2)
+
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("Effect of Beta on SIR")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-6-output-1.png)
+
+## Multiple diseases simultaneously
+
+``` python
+sim_multi = ss.Sim(
+    n_agents=1_000,
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=[
+        ss.SIR(name='flu', beta=0.08, dur_inf=3, init_prev=0.01),
+        ss.SIS(name='cold', beta=0.03, dur_inf=3, init_prev=0.02),
+    ],
+    dt=1.0, start=0, stop=40, rand_seed=42, verbose=0,
+)
+sim_multi.run()
+
+prev_flu  = sim_multi.results.flu.prevalence.values
+prev_cold = sim_multi.results.cold.prevalence.values
+
+pl.figure(figsize=(10, 6))
+pl.plot(range(len(prev_flu)),  prev_flu,  label="Flu (SIR)",  lw=2, color="red")
+pl.plot(range(len(prev_cold)), prev_cold, label="Cold (SIS)", lw=2, color="blue")
+pl.xlabel("Day")
+pl.ylabel("Prevalence")
+pl.title("Two Diseases in One Simulation")
+pl.legend()
+pl.show()
+```
+
+![](04_diseases_files/figure-commonmark/cell-7-output-1.png)

@@ -37,12 +37,15 @@ sim = demo(n_agents=1000, verbose=0)
 Let's build the same simulation explicitly to understand the components.
 
 ```{julia}
+n_contacts = 10
+beta = 0.5 / n_contacts  # R₀ ≈ beta × n_contacts × dur_inf = 2
+
 sim = Sim(
     n_agents = 1_000,
-    networks = RandomNet(n_contacts=10),
-    diseases = SIR(beta=0.05, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
     dt = 1.0,       # 1 day timestep
-    stop = 200.0,    # simulate for 200 days
+    stop = 40.0,    # simulate for 40 time units (10× infectious period)
     rand_seed = 42,
     verbose = 0,
 )
@@ -53,9 +56,10 @@ run!(sim)
 
 - `n_agents = 1000`: Simulate 1,000 individuals
 - `RandomNet(n_contacts=10)`: Each agent has ~10 contacts per day (bidirectional, so 5 edges created per agent)
-- `SIR(beta=0.05, dur_inf=4.0, init_prev=0.01)`: SIR disease with per-day transmission rate 0.05, mean infectious period of 4 days, and 1% initial prevalence
+- `beta = 0.5 / n_contacts = 0.05`: Transmission rate per contact, chosen so that R₀ ≈ β × c × D = 0.05 × 10 × 4 = 2
+- `SIR(dur_inf=4.0, init_prev=0.01)`: Mean infectious period of 4 time units, 1% initial prevalence
 - `dt = 1.0`: Time is measured in days
-- `stop = 200.0`: Run for 200 days
+- `stop = 40.0`: Run for 40 time units (10× the infectious period)
 
 ## Accessing results
 

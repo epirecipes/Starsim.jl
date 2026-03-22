@@ -582,8 +582,8 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
         new_p1[i] = m
         new_p2[i] = f
 
-        # Acts per timestep — Python uses .astype(int) truncation
-        new_acts[i] = max(1.0, floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt)))
+        # Acts per timestep — Python uses .astype(int) truncation (can be 0)
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
 
         # Determine partnership type based on risk group matching
         rg_m = rg_raw[m]
@@ -599,10 +599,11 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
                 edge_is_stable = true
                 agk = _age_group_key(age_raw[f])
                 mu, sigma = stable_dur_pars[agk][rg_f + 1]
-                dur_years = _lognorm_sample(rng, mu, sigma)
+                # Python converts dur pars to months via .months, then samples
+                dur_months = _lognorm_sample(rng, mu * 12.0, sigma * 12.0)
             else
                 # Failed match → onetime (dur = 1 timestep), matching Python
-                dur_years = dt
+                dur_months = -1.0
             end
         else
             p_casual = p_mismatched_casual[rg_f + 1]
@@ -610,18 +611,24 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
             if is_match
                 agk = _age_group_key(age_raw[f])
                 mu, sigma = casual_dur_pars[agk][rg_f + 1]
-                dur_years = _lognorm_sample(rng, mu, sigma)
+                dur_months = _lognorm_sample(rng, mu * 12.0, sigma * 12.0)
             else
                 # Failed match → onetime (dur = 1 timestep), matching Python
-                dur_years = dt
+                dur_months = -1.0
             end
         end
 
-        # Convert duration from years to timesteps
-        dur_ts = max(1.0, round(dur_years / dt))
+        # Convert months to integer timesteps (Python truncates via int array assignment)
+        # Non-matched edges default to dur=1 (onetime)
+        if dur_months < 0.0
+            dur_ts = 1.0  # Failed match → onetime
+        else
+            dur_ts = floor(dur_months)  # Truncate like Python's float→int cast
+            dur_ts = max(dur_ts, 0.0)   # Can't be negative
+        end
         new_dur[i] = dur_ts
 
-        # Classify edge type (matching Python: onetime if dur==1, else stable/casual)
+        # Classify: Python sets types first, then overwrites dur==1 as onetime
         if dur_ts <= 1.0
             new_type[i] = 2  # onetime
         elseif edge_is_stable
@@ -663,7 +670,7 @@ function _add_pairs_sw!(net::StructuredSexual, sim)
     new_sw = fill(true, n)
 
     for i in 1:n
-        new_acts[i] = max(1.0, floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt)))
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
     end
 
     Starsim.add_edges!(getfield(net, :data).edges, p1, p2, new_beta, new_acts)

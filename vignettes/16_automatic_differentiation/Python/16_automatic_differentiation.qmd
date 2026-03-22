@@ -126,7 +126,7 @@ def calib_objective(beta):
     return (np.max(prev) - target_prev) ** 2
 
 h = 1e-3
-x0 = 0.5 / n_contacts
+x0 = 0.5 / n_contacts  # = 0.05
 obj = calib_objective(x0)
 grad = (calib_objective(x0 + h) - calib_objective(x0 - h)) / (2 * h)
 print(f"Objective at beta=0.05: {obj:.6f}")

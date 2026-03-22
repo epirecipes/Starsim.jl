@@ -26,13 +26,16 @@ sim = ss.demo(n_agents=1000)
 ## Building a basic SIR model
 
 ```{python}
+n_contacts = 10
+beta = 0.5 / n_contacts  # R₀ ≈ beta × n_contacts × dur_inf = 2
+
 sim = ss.Sim(
     n_agents=1_000,
-    networks=ss.RandomNet(n_contacts=10),
-    diseases=ss.SIR(beta=0.05, dur_inf=4, init_prev=0.01),
+    networks=ss.RandomNet(n_contacts=n_contacts),
+    diseases=ss.SIR(beta=beta, dur_inf=4, init_prev=0.01),
     dt=1.0,
     start=0,
-    stop=200,
+    stop=40,
     rand_seed=42,
     verbose=0,
 )

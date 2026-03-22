@@ -1,0 +1,207 @@
+---
+title: "Malaria Metapopulation Model (Python)"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This is the Python companion to the Julia `14_malaria` vignette. We implement
+a multi-patch Ross-Macdonald malaria model as a Starsim module with Euler
+integration and seasonal mosquito forcing, following `code/malaria_demo/demo_sim_ss.py`.
+
+## Define the malaria module
+
+```{python}
+import numpy as np
+import starsim as ss
+from scipy.stats import norm
+
+def analytical_mosquito_density(ivector, hvector, pij, a, b, c, mu, r, tau):
+    xvector = ivector / r
+    gvector = xvector * r / (1 - xvector)
+    n = len(xvector)
+    fvector = np.zeros(n)
+    for i in range(n):
+        k_i = np.sum(pij[:, i] * xvector * hvector) / np.sum(pij[:, i] * hvector)
+        fvector[i] = b * c * k_i / (a * c * k_i / mu + 1)
+    fmatrix = np.diag(fvector)
+    cvector = np.linalg.solve(pij @ fmatrix, gvector)
+    m = cvector * mu / a**2 / np.exp(-mu * tau)
+    return m
+
+def make_seasonal_sinusoidal(amplitude=0.8, peak_day=180):
+    def seasonal_fn(t):
+        day_of_year = t % 365
+        return max(0.0, 1 + amplitude * np.sin(2 * np.pi * (day_of_year - peak_day + 365/4) / 365))
+    return seasonal_fn
+
+# Default 3-patch data
+default_hvector = np.array([5000.0, 10000.0, 8000.0])
+default_ivector = np.array([0.001, 0.003, 0.002])
+default_pij = np.array([
+    [0.85, 0.10, 0.05],
+    [0.08, 0.80, 0.12],
+    [0.06, 0.09, 0.85],
+])
+
+class Malaria_SS(ss.Module):
+    def __init__(self, hvector=None, ivector=None, pij=None, seasonal_fn=None, **kwargs):
+        super().__init__()
+        self.define_pars(
+            a=0.3, b=0.1, c=0.214,
+            r=1/150, mu=1/10, tau=10,
+        )
+        self.update_pars(**kwargs)
+
+        self.hvector = hvector if hvector is not None else default_hvector.copy()
+        self.ivector = ivector if ivector is not None else default_ivector.copy()
+        self.pij = pij if pij is not None else default_pij.copy()
+        self.seasonal_fn = seasonal_fn if seasonal_fn is not None else make_seasonal_sinusoidal()
+        self.numpatch = len(self.hvector)
+
+        self.c_labels = {}
+        for i in range(self.numpatch):
+            self.c_labels[f'X_{i}'] = f'Prevalence (Patch {i+1})'
+            self.c_labels[f'C_{i}'] = f'Cumulative incidence (Patch {i+1})'
+
+        self.c = {key: 0.0 for key in self.c_labels}
+        self.m_base = None
+
+    def init_post(self):
+        super().init_post()
+        p = self.pars
+        self.m_base = analytical_mosquito_density(
+            self.ivector, self.hvector, self.pij,
+            p.a, p.b, p.c, p.mu, p.r, p.tau,
+        )
+        self.m_base = np.clip(self.m_base, 1e-10, None)
+
+        x0 = self.ivector / p.r
+        for i in range(self.numpatch):
+            self.c[f'X_{i}'] = x0[i]
+            self.c[f'C_{i}'] = 0.0
+
+    def step(self):
+        p = self.pars
+        c = self.c
+        n = self.numpatch
+        t = self.now
+        dt = float(self.dt)
+
+        X = np.array([c[f'X_{i}'] for i in range(n)])
+        m = self.m_base * self.seasonal_fn(t)
+
+        H = self.hvector
+        pij = self.pij
+        k = (X * H) @ pij / (H @ pij)
+
+        Z_numer = p.a**2 * p.b * p.c * np.exp(-p.mu * p.tau) * k
+        Z_denom = p.a * p.c * k + p.mu
+        dC = (m * Z_numer / Z_denom) @ pij.T * (1 - X)
+        dX = dC - p.r * X
+
+        for i in range(n):
+            c[f'X_{i}'] += dX[i] * dt
+            c[f'C_{i}'] += dC[i] * dt
+
+    def init_results(self):
+        super().init_results()
+        results = []
+        for key, label in self.c_labels.items():
+            results.append(ss.Result(key, label=label))
+        for i in range(self.numpatch):
+            results.append(ss.Result(f'daily_inc_{i}', label=f'Daily incidence (Patch {i+1})'))
+            results.append(ss.Result(f'm_seasonal_{i}', label=f'Mosquito density (Patch {i+1})'))
+            results.append(ss.Result(f'eir_{i}', label=f'EIR (Patch {i+1})'))
+        self.define_results(*results)
+
+    def update_results(self):
+        super().update_results()
+        ti = self.ti
+        c = self.c
+        p = self.pars
+        n = self.numpatch
+        t = self.now
+
+        for key in c:
+            self.results[key][ti] = c[key]
+
+        X = np.array([c[f'X_{i}'] for i in range(n)])
+        m_seasonal = self.m_base * self.seasonal_fn(t)
+
+        H = self.hvector
+        pij = self.pij
+        k = (X * H) @ pij / (H @ pij)
+
+        Z_numer = p.a**2 * p.b * p.c * np.exp(-p.mu * p.tau) * k
+        Z_denom = p.a * p.c * k + p.mu
+        dC = (m_seasonal * Z_numer / Z_denom) @ pij.T * (1 - X)
+
+        Z = p.a * p.c * k * np.exp(-p.mu * p.tau) / (p.a * p.c * k + p.mu)
+        eir = m_seasonal * p.a * (Z @ pij.T)
+
+        for i in range(n):
+            self.results[f'daily_inc_{i}'][ti] = dC[i]
+            self.results[f'm_seasonal_{i}'][ti] = m_seasonal[i]
+            self.results[f'eir_{i}'][ti] = eir[i]
+```
+
+## Run the simulation
+
+```{python}
+mal = Malaria_SS()
+sim = ss.Sim(modules=mal, copy_inputs=False, start=0, stop=365*5, dt=1, n_agents=1)
+sim.run()
+```
+
+## Plot results
+
+```{python}
+import pylab as pl
+
+res = sim.results.malaria_ss
+npts = len(res.X_0.values)
+tvec = np.arange(npts)
+patches = ['Patch 1', 'Patch 2', 'Patch 3']
+
+fig, axes = pl.subplots(2, 2, figsize=(12, 8))
+
+ax = axes[0, 0]
+for i, name in enumerate(patches):
+    ax.plot(tvec, res[f'X_{i}'].values, label=name)
+ax.set_title('Prevalence')
+ax.set_xlabel('Time (days)')
+ax.legend()
+
+ax = axes[0, 1]
+for i, name in enumerate(patches):
+    ax.plot(tvec, res[f'daily_inc_{i}'].values, label=name)
+ax.set_title('Daily Incidence')
+ax.set_xlabel('Time (days)')
+ax.legend()
+
+ax = axes[1, 0]
+for i, name in enumerate(patches):
+    ax.plot(tvec, res[f'm_seasonal_{i}'].values, label=name)
+ax.set_title('Seasonal Mosquito Density')
+ax.set_xlabel('Time (days)')
+ax.legend()
+
+ax = axes[1, 1]
+for i, name in enumerate(patches):
+    ax.plot(tvec, res[f'eir_{i}'].values, label=name)
+ax.set_title('EIR')
+ax.set_xlabel('Time (days)')
+ax.legend()
+
+pl.suptitle('Malaria Transmission Model (3-Patch)', fontsize=14, fontweight='bold')
+pl.tight_layout()
+pl.show()
+```

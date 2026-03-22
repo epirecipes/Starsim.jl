@@ -1,0 +1,172 @@
+# Cholera: Environmental Transmission (Python)
+Simon Frost
+
+- [Overview](#overview)
+- [Define the Cholera disease](#define-the-cholera-disease)
+- [Run the simulation](#run-the-simulation)
+- [Plot results](#plot-results)
+
+## Overview
+
+This is the Python companion to the Julia `09_cholera` vignette. We
+implement a cholera model with dual transmission (direct contact +
+environmental reservoir), following the example in
+`starsim_examples/diseases/cholera.py`.
+
+## Define the Cholera disease
+
+``` python
+import numpy as np
+import starsim as ss
+
+class Cholera(ss.Infection):
+    def __init__(self, pars=None, **kwargs):
+        super().__init__()
+        self.define_pars(
+            beta = 0.5,
+            init_prev = ss.bernoulli(0.005),
+
+            # Natural history (days)
+            dur_exp     = ss.lognorm_ex(mean=2.772, std=4.737),
+            dur_symp    = ss.lognorm_ex(mean=5.0, std=1.8),
+            dur_asymp   = ss.uniform(low=1.0, high=10.0),
+            p_symp      = ss.bernoulli(p=0.5),
+            p_death     = ss.bernoulli(p=0.005),
+            dur_to_dead = ss.lognorm_ex(mean=1.0, std=0.5),
+            asymp_trans = 0.01,
+
+            # Environmental
+            beta_env       = 0.5 / 3,
+            half_sat       = 1_000_000.0,
+            shedding_rate  = 10.0,
+            decay_rate     = 0.033,
+        )
+        self.update_pars(pars, **kwargs)
+
+        self.define_states(
+            ss.BoolState('exposed'),
+            ss.BoolState('symptomatic'),
+            ss.BoolState('recovered'),
+            ss.FloatArr('ti_exposed'),
+            ss.FloatArr('ti_symptomatic'),
+            ss.FloatArr('ti_recovered'),
+            ss.FloatArr('ti_dead'),
+        )
+
+    def init_results(self):
+        super().init_results()
+        self.define_results(
+            ss.Result('new_deaths', dtype=int),
+            ss.Result('env_conc', dtype=float),
+        )
+
+    def step_state(self):
+        ti = self.ti
+
+        # Exposed -> infected
+        infected = (self.exposed & (self.ti_infected <= ti)).uids
+        self.infected[infected] = True
+        self.exposed[infected] = False
+
+        # Infected -> symptomatic
+        symptomatic = (self.infected & (self.ti_symptomatic <= ti)).uids
+        self.symptomatic[symptomatic] = True
+
+        # Infected -> recovered
+        recovered = (self.infectious & (self.ti_recovered <= ti)).uids
+        self.exposed[recovered] = False
+        self.infected[recovered] = False
+        self.symptomatic[recovered] = False
+        self.recovered[recovered] = True
+
+        # Deaths
+        deaths = (self.ti_dead <= ti).uids
+        if len(deaths):
+            self.sim.people.request_death(deaths)
+
+    def set_prognoses(self, uids, sources=None):
+        super().set_prognoses(uids, sources)
+        ti = self.ti
+        p = self.pars
+
+        self.susceptible[uids] = False
+        self.exposed[uids] = True
+        self.ti_exposed[uids] = ti
+
+        self.ti_infected[uids] = ti + p.dur_exp.rvs(uids)
+
+        symp_uids = p.p_symp.filter(uids)
+        self.ti_symptomatic[symp_uids] = self.ti_infected[symp_uids]
+
+        dead_uids = p.p_death.filter(symp_uids)
+        self.ti_dead[dead_uids] = self.ti_symptomatic[dead_uids] + p.dur_to_dead.rvs(dead_uids)
+        symp_rec = np.setdiff1d(symp_uids, dead_uids)
+        asymp_uids = np.setdiff1d(uids, symp_uids)
+
+        self.ti_recovered[symp_rec] = self.ti_exposed[symp_rec] + p.dur_symp.rvs(symp_rec)
+        self.ti_recovered[asymp_uids] = self.ti_exposed[asymp_uids] + p.dur_asymp.rvs(asymp_uids)
+
+    def update_results(self):
+        super().update_results()
+        ti = self.ti
+        self.results['new_deaths'][ti] = np.count_nonzero(self.ti_dead == ti)
+        self.results['n_symptomatic'][ti] = self.symptomatic.sum()
+
+    def step_die(self, uids):
+        for state in ['susceptible', 'exposed', 'infected', 'symptomatic', 'recovered']:
+            self.state_dict[state][uids] = False
+```
+
+## Run the simulation
+
+``` python
+sim = ss.Sim(
+    n_agents=5000,
+    networks=ss.RandomNet(n_contacts=8),
+    diseases=Cholera(beta=0.5),
+    dt=1.0,
+    start=0,
+    stop=200,
+    rand_seed=42,
+    verbose=0,
+)
+sim.run()
+```
+
+    Sim(n=5000; 0—200; networks=randomnet; diseases=cholera)
+
+## Plot results
+
+``` python
+import pylab as pl
+
+res = sim.results.cholera
+tvec = np.arange(len(res.n_infected.values))
+
+fig, axes = pl.subplots(1, 2, figsize=(12, 5))
+
+ax = axes[0]
+ax.plot(tvec, res.n_susceptible.values, label='Susceptible', color='blue')
+ax.plot(tvec, res.n_infected.values, label='Infected', color='red')
+ax.set_xlabel('Day')
+ax.set_ylabel('Count')
+ax.set_title('Cholera SEIR Dynamics')
+ax.legend()
+
+ax = axes[1]
+ax.plot(tvec, res.prevalence.values, color='darkred', lw=2)
+ax.set_xlabel('Day')
+ax.set_ylabel('Prevalence')
+ax.set_title('Cholera Prevalence')
+
+pl.tight_layout()
+pl.show()
+
+print(f"Peak prevalence: {max(res.prevalence.values):.4f}")
+print(f"Peak day: {np.argmax(res.prevalence.values)}")
+```
+
+![](09_cholera_files/figure-commonmark/cell-4-output-1.png)
+
+    Peak prevalence: 0.5394
+    Peak day: 8
