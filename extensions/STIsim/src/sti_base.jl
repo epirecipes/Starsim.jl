@@ -8,6 +8,24 @@ Bidirectional with separate beta_m2f, beta_f2m, beta_m2m.
 """
 
 # ============================================================================
+# Lognormal sampling helper (same as in hiv.jl)
+# ============================================================================
+
+"""
+Sample from an *explicit* lognormal with the given mean and std.
+Converts to underlying normal parameters: given lognormal mean μ and std σ,
+  σ²_n = log(1 + (σ/μ)²),  μ_n = log(μ) - σ²_n/2.
+"""
+function _seis_lognorm_ex_sample(rng, mean_val::Float64, std_val::Float64)
+    mean_val <= 0.0 && return mean_val
+    std_val <= 0.0 && return mean_val
+    cv = std_val / mean_val
+    sigma2 = log(1.0 + cv^2)
+    mu = log(mean_val) - sigma2 / 2.0
+    return exp(mu + sqrt(sigma2) * randn(rng))
+end
+
+# ============================================================================
 # SEIS <: AbstractInfection  — base SEIS disease for simple STIs
 # ============================================================================
 
@@ -19,7 +37,8 @@ After clearance, agents return to susceptible. Supports:
 - Per-act transmission with condom efficacy
 - Direction-specific betas (m2f, f2m, m2m)
 - Exposed period before infectiousness
-- Symptomatic vs asymptomatic branches
+- Symptomatic vs asymptomatic branches with sex-specific durations
+- Sex-specific clearance durations (lognormal)
 - PID (pelvic inflammatory disease) for females
 
 # Keyword arguments
@@ -32,10 +51,21 @@ After clearance, agents return to susceptible. Supports:
 - `dur_exp::Real` — exposed duration in years (default 1/52, ~1 week)
 - `p_symp_f::Real` — probability symptomatic for females (default 0.375)
 - `p_symp_m::Real` — probability symptomatic for males (default 0.375)
-- `dur_inf::Real` — mean infection duration in years (default 1.0)
-- `dur_inf_std::Real` — std of infection duration in years (default 0.1)
+- `dur_inf::Real` — mean infection duration in years (fallback, default 1.0)
+- `dur_inf_std::Real` — std of infection duration in years (fallback, default 0.1)
+- `dur_asymp2clear_f::Real` — female asymptomatic→clearance mean (years; -1 = use dur_inf)
+- `dur_asymp2clear_f_std::Real` — female asymptomatic→clearance std (years)
+- `dur_asymp2clear_m::Real` — male asymptomatic→clearance mean (years; -1 = use dur_inf)
+- `dur_asymp2clear_m_std::Real` — male asymptomatic→clearance std (years)
+- `dur_symp2clear_f::Real` — female symptomatic→clearance mean (years; -1 = use dur_inf)
+- `dur_symp2clear_f_std::Real` — female symptomatic→clearance std (years)
+- `dur_symp2clear_m::Real` — male symptomatic→clearance mean (years; -1 = use dur_inf)
+- `dur_symp2clear_m_std::Real` — male symptomatic→clearance std (years)
+- `dur_presymp_f::Real` — female presymptomatic period mean (years; -1 = use dur_exp-based)
+- `dur_presymp_f_std::Real` — female presymptomatic period std (years)
+- `dur_presymp_m::Real` — male presymptomatic period mean (years; -1 = use dur_exp-based)
+- `dur_presymp_m_std::Real` — male presymptomatic period std (years)
 - `p_pid::Real` — probability of PID for infected females (default 0.2)
-- `p_clear::Real` — probability of spontaneous clearance per timestep (default 0.0)
 """
 mutable struct SEIS <: Starsim.AbstractInfection
     infection::Starsim.InfectionData
@@ -62,6 +92,22 @@ mutable struct SEIS <: Starsim.AbstractInfection
     dur_inf_std::Float64
     p_pid::Float64
 
+    # Sex-specific clearance durations (years); -1.0 = use dur_inf fallback
+    dur_asymp2clear_f::Float64
+    dur_asymp2clear_f_std::Float64
+    dur_asymp2clear_m::Float64
+    dur_asymp2clear_m_std::Float64
+    dur_symp2clear_f::Float64
+    dur_symp2clear_f_std::Float64
+    dur_symp2clear_m::Float64
+    dur_symp2clear_m_std::Float64
+
+    # Sex-specific presymptomatic period (years); -1.0 = use dur_exp-based fallback
+    dur_presymp_f::Float64
+    dur_presymp_f_std::Float64
+    dur_presymp_m::Float64
+    dur_presymp_m_std::Float64
+
     rng::StableRNG
 end
 
@@ -81,6 +127,18 @@ function SEIS(;
     dur_inf::Real      = 1.0,
     dur_inf_std::Real  = 0.1,
     p_pid::Real        = 0.2,
+    dur_asymp2clear_f::Real     = -1.0,
+    dur_asymp2clear_f_std::Real = -1.0,
+    dur_asymp2clear_m::Real     = -1.0,
+    dur_asymp2clear_m_std::Real = -1.0,
+    dur_symp2clear_f::Real      = -1.0,
+    dur_symp2clear_f_std::Real  = -1.0,
+    dur_symp2clear_m::Real      = -1.0,
+    dur_symp2clear_m_std::Real  = -1.0,
+    dur_presymp_f::Real         = -1.0,
+    dur_presymp_f_std::Real     = -1.0,
+    dur_presymp_m::Real         = -1.0,
+    dur_presymp_m_std::Real     = -1.0,
     label::String      = "SEIS STI",
 )
     inf = Starsim.InfectionData(name; init_prev=Float64(init_prev), beta=Float64(beta_m2f), label=label)
@@ -105,6 +163,18 @@ function SEIS(;
         Float64(dur_inf),
         Float64(dur_inf_std),
         Float64(p_pid),
+        Float64(dur_asymp2clear_f),
+        Float64(dur_asymp2clear_f_std),
+        Float64(dur_asymp2clear_m),
+        Float64(dur_asymp2clear_m_std),
+        Float64(dur_symp2clear_f),
+        Float64(dur_symp2clear_f_std),
+        Float64(dur_symp2clear_m),
+        Float64(dur_symp2clear_m_std),
+        Float64(dur_presymp_f),
+        Float64(dur_presymp_f_std),
+        Float64(dur_presymp_m),
+        Float64(dur_presymp_m_std),
         StableRNG(0),
     )
 end
@@ -286,11 +356,26 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
     p2 = edges.p2
     eb = edges.beta
     ea = edges.acts
-    infected_raw    = d.infection.infected.raw
-    exposed_raw     = d.exposed.raw
-    susceptible_raw = d.infection.susceptible.raw
-    rel_trans_raw   = d.infection.rel_trans.raw
-    rel_sus_raw     = d.infection.rel_sus.raw
+
+    # SNAPSHOT state arrays before edge loop (matching Python's synchronous update:
+    # rel_trans/rel_sus are computed once; new infections don't affect this step)
+    n_agents = length(d.infection.infected.raw)
+    infected_snap    = copy(d.infection.infected.raw)
+    exposed_snap     = copy(d.exposed.raw)
+    susceptible_snap = copy(d.infection.susceptible.raw)
+    rel_trans_snap   = copy(d.infection.rel_trans.raw)
+    rel_sus_snap     = copy(d.infection.rel_sus.raw)
+
+    # Mask: non-infectious get rel_trans=0, non-susceptible get rel_sus=0
+    @inbounds for u in 1:n_agents
+        if !infected_snap[u]
+            rel_trans_snap[u] = 0.0
+        end
+        if !susceptible_snap[u]
+            rel_sus_snap[u] = 0.0
+        end
+    end
+
     female_raw      = sim.people.female.raw
     rng = d.rng
 
@@ -307,27 +392,28 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
         acts = ea[i]
 
         # src → trg
-        if (infected_raw[src] || exposed_raw[src]) && susceptible_raw[trg] && !exposed_raw[trg]
-            if infected_raw[src]  # Only infectious (not exposed) can transmit
+        if (infected_snap[src] || exposed_snap[src]) && susceptible_snap[trg] && !exposed_snap[trg]
+            if infected_snap[src]  # Only infectious (not exposed) can transmit
                 beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
-                # Match Python: net_beta first, then multiply by rel_trans/rel_sus
                 net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-                p = clamp(rel_trans_raw[src] * rel_sus_raw[trg] * net_beta_val, 0.0, 1.0)
+                p = clamp(rel_trans_snap[src] * rel_sus_snap[trg] * net_beta_val, 0.0, 1.0)
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, trg, src, ti)
+                    susceptible_snap[trg] = false  # Prevent re-infection (matches Python dedup)
                     new_infections += 1
                 end
             end
         end
 
         # trg → src (bidirectional)
-        if bidir && (infected_raw[trg] || exposed_raw[trg]) && susceptible_raw[src] && !exposed_raw[src]
-            if infected_raw[trg]
+        if bidir && (infected_snap[trg] || exposed_snap[trg]) && susceptible_snap[src] && !exposed_snap[src]
+            if infected_snap[trg]
                 beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
                 net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-                p = clamp(rel_trans_raw[trg] * rel_sus_raw[src] * net_beta_val, 0.0, 1.0)
+                p = clamp(rel_trans_snap[trg] * rel_sus_snap[src] * net_beta_val, 0.0, 1.0)
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, src, trg, ti)
+                    susceptible_snap[src] = false  # Prevent re-infection (matches Python dedup)
                     new_infections += 1
                 end
             end
@@ -349,35 +435,73 @@ function _get_directional_beta(src_female::Bool, trg_female::Bool, beta_m2f, bet
     end
 end
 
-"""Infect a single agent with SEIS prognosis."""
+"""Infect a single agent with SEIS prognosis (sex-specific lognormal clearance)."""
 function _do_seis_infection!(d::SEIS, sim, target::Int, source::Int, ti::Int)
     dt = sim.pars.dt
     female = sim.people.female.raw[target]
+    rng = d.rng
 
     d.infection.susceptible.raw[target] = false
     d.exposed.raw[target] = true
     d.ti_exposed.raw[target] = Float64(ti)
 
     # Time to become infectious (exposed → infected)
-    dur_exp_ts = d.dur_exp / dt
-    ti_inf = Float64(ti) + max(1.0, dur_exp_ts + randn(d.rng) * dur_exp_ts * 0.3)
+    if d.dur_exp > 0.0
+        dur_exp_ts = d.dur_exp / dt
+        ti_inf = Float64(ti) + max(1.0, dur_exp_ts + randn(rng) * dur_exp_ts * 0.3)
+    else
+        ti_inf = Float64(ti)  # Immediate infectiousness (e.g. gonorrhea)
+    end
     d.infection.ti_infected.raw[target] = ti_inf
-
-    # Time to clearance
-    dur_ts = d.dur_inf / dt
-    dur_var = max(1.0, dur_ts + randn(d.rng) * (d.dur_inf_std / dt))
-    d.ti_clearance.raw[target] = ti_inf + dur_var
 
     # Symptomatic?
     p_symp = female ? d.p_symp_f : d.p_symp_m
-    if rand(d.rng) < p_symp
-        symp_delay = max(1.0, dur_exp_ts * 0.5 + randn(d.rng) * dur_exp_ts * 0.2)
-        d.ti_symptomatic.raw[target] = ti_inf + symp_delay
+    is_symp = rand(rng) < p_symp
+
+    if is_symp
+        # Presymptomatic period (sex-specific lognormal if available)
+        presymp_mean = female ? d.dur_presymp_f : d.dur_presymp_m
+        presymp_std  = female ? d.dur_presymp_f_std : d.dur_presymp_m_std
+        if presymp_mean >= 0.0
+            presymp_dur_years = _seis_lognorm_ex_sample(rng, presymp_mean, presymp_std)
+            presymp_ts = max(0.0, presymp_dur_years / dt)
+        else
+            # Fallback: use dur_exp-based heuristic
+            dur_exp_ts = d.dur_exp / dt
+            presymp_ts = max(1.0, dur_exp_ts * 0.5 + randn(rng) * dur_exp_ts * 0.2)
+        end
+        d.ti_symptomatic.raw[target] = ti_inf + presymp_ts
+
+        # Symptomatic clearance (sex-specific lognormal if available)
+        clear_mean = female ? d.dur_symp2clear_f : d.dur_symp2clear_m
+        clear_std  = female ? d.dur_symp2clear_f_std : d.dur_symp2clear_m_std
+        if clear_mean >= 0.0
+            clear_dur_years = _seis_lognorm_ex_sample(rng, clear_mean, clear_std)
+            clear_ts = max(1.0, clear_dur_years / dt)
+            d.ti_clearance.raw[target] = d.ti_symptomatic.raw[target] + clear_ts
+        else
+            # Fallback: use dur_inf
+            dur_ts = max(1.0, d.dur_inf / dt + randn(rng) * (d.dur_inf_std / dt))
+            d.ti_clearance.raw[target] = ti_inf + dur_ts
+        end
+    else
+        # Asymptomatic clearance (sex-specific lognormal if available)
+        clear_mean = female ? d.dur_asymp2clear_f : d.dur_asymp2clear_m
+        clear_std  = female ? d.dur_asymp2clear_f_std : d.dur_asymp2clear_m_std
+        if clear_mean >= 0.0
+            clear_dur_years = _seis_lognorm_ex_sample(rng, clear_mean, clear_std)
+            clear_ts = max(1.0, clear_dur_years / dt)
+            d.ti_clearance.raw[target] = ti_inf + clear_ts
+        else
+            # Fallback: use dur_inf
+            dur_ts = max(1.0, d.dur_inf / dt + randn(rng) * (d.dur_inf_std / dt))
+            d.ti_clearance.raw[target] = ti_inf + dur_ts
+        end
     end
 
     # PID for females
-    if female && rand(d.rng) < d.p_pid
-        pid_delay = max(1.0, 6.0 / (dt * 52) + randn(d.rng) * 2.0 / (dt * 52))
+    if female && rand(rng) < d.p_pid
+        pid_delay = max(1.0, 6.0 / (dt * 52) + randn(rng) * 2.0 / (dt * 52))
         d.ti_pid.raw[target] = ti_inf + pid_delay
     end
 
