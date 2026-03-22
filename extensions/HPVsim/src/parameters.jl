@@ -174,6 +174,7 @@ Base.@kwdef struct GenotypeParams
     cancer_fn_transform_prob::Float64 = 2.0e-3 # Cancer transformation probability
 
     # Cancer outcomes
+    cancer_rate::Float64            = 0.005   # Annual P(CIN3 → Cancer) — separate from CIN2→CIN3
     cancer_mortality_rate::Float64  = 0.05    # Annual cancer mortality rate
 end
 
@@ -181,7 +182,11 @@ end
 # Default genotype parameters (from Python hpvsim/defaults.py)
 # ============================================================================
 
-"""Default parameters for HPV-16 (high-risk, most oncogenic)."""
+"""Default parameters for HPV-16 (high-risk, most oncogenic).
+
+Rate-based CIN rates calibrated to match effective CIN dynamics of
+Python hpvsim's duration-based model (logf2 severity + lognormal durations).
+"""
 const HPV16_PARAMS = GenotypeParams(
     name                     = :hpv16,
     rel_beta                 = 1.0,
@@ -189,13 +194,13 @@ const HPV16_PARAMS = GenotypeParams(
     dur_precin_std           = 2.0,
     dur_cin_mean             = 5.0,
     dur_cin_std              = 3.0,
-    prog_rate_cin1           = 0.10,
-    prog_rate_cin2           = 0.05,
-    prog_rate_cin3           = 0.03,
+    prog_rate_cin1           = 0.08,
+    prog_rate_cin2           = 0.04,
+    prog_rate_cin3           = 0.025,
     clearance_rate_inf       = 0.25,
-    clearance_rate_cin1      = 0.15,
-    clearance_rate_cin2      = 0.10,
-    clearance_rate_cin3      = 0.05,
+    clearance_rate_cin1      = 0.18,
+    clearance_rate_cin2      = 0.12,
+    clearance_rate_cin3      = 0.06,
     own_imm                  = 0.90,
     sero_prob                = 0.75,
     dur_precin_par1          = 3.0,
@@ -206,6 +211,7 @@ const HPV16_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 0.0,
     cin_fn_ttc               = 50.0,
     cancer_fn_transform_prob = 2.0e-3,
+    cancer_rate              = 0.005,
     cancer_mortality_rate    = 0.065,
 )
 
@@ -217,13 +223,13 @@ const HPV18_PARAMS = GenotypeParams(
     dur_precin_std           = 1.5,
     dur_cin_mean             = 5.0,
     dur_cin_std              = 3.0,
-    prog_rate_cin1           = 0.08,
-    prog_rate_cin2           = 0.04,
-    prog_rate_cin3           = 0.02,
+    prog_rate_cin1           = 0.065,
+    prog_rate_cin2           = 0.032,
+    prog_rate_cin3           = 0.017,
     clearance_rate_inf       = 0.30,
-    clearance_rate_cin1      = 0.18,
-    clearance_rate_cin2      = 0.12,
-    clearance_rate_cin3      = 0.06,
+    clearance_rate_cin1      = 0.22,
+    clearance_rate_cin2      = 0.14,
+    clearance_rate_cin3      = 0.07,
     own_imm                  = 0.90,
     sero_prob                = 0.56,
     dur_precin_par1          = 2.5,
@@ -234,6 +240,7 @@ const HPV18_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 0.0,
     cin_fn_ttc               = 50.0,
     cancer_fn_transform_prob = 2.0e-3,
+    cancer_rate              = 0.003,
     cancer_mortality_rate    = 0.065,
 )
 
@@ -245,13 +252,13 @@ const HI5_PARAMS = GenotypeParams(
     dur_precin_std           = 1.5,
     dur_cin_mean             = 4.5,
     dur_cin_std              = 3.0,
-    prog_rate_cin1           = 0.07,
-    prog_rate_cin2           = 0.035,
-    prog_rate_cin3           = 0.015,
+    prog_rate_cin1           = 0.056,
+    prog_rate_cin2           = 0.028,
+    prog_rate_cin3           = 0.012,
     clearance_rate_inf       = 0.35,
-    clearance_rate_cin1      = 0.20,
-    clearance_rate_cin2      = 0.14,
-    clearance_rate_cin3      = 0.07,
+    clearance_rate_cin1      = 0.24,
+    clearance_rate_cin2      = 0.17,
+    clearance_rate_cin3      = 0.085,
     own_imm                  = 0.90,
     sero_prob                = 0.60,
     dur_precin_par1          = 2.5,
@@ -262,6 +269,7 @@ const HI5_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 0.0,
     cin_fn_ttc               = 50.0,
     cancer_fn_transform_prob = 1.5e-3,
+    cancer_rate              = 0.002,
     cancer_mortality_rate    = 0.055,
 )
 
@@ -273,13 +281,13 @@ const OHR_PARAMS = GenotypeParams(
     dur_precin_std           = 1.5,
     dur_cin_mean             = 4.0,
     dur_cin_std              = 2.5,
-    prog_rate_cin1           = 0.05,
-    prog_rate_cin2           = 0.025,
-    prog_rate_cin3           = 0.010,
+    prog_rate_cin1           = 0.04,
+    prog_rate_cin2           = 0.02,
+    prog_rate_cin3           = 0.008,
     clearance_rate_inf       = 0.40,
-    clearance_rate_cin1      = 0.25,
-    clearance_rate_cin2      = 0.18,
-    clearance_rate_cin3      = 0.10,
+    clearance_rate_cin1      = 0.30,
+    clearance_rate_cin2      = 0.22,
+    clearance_rate_cin3      = 0.12,
     own_imm                  = 0.90,
     sero_prob                = 0.50,
     dur_precin_par1          = 2.5,
@@ -290,6 +298,7 @@ const OHR_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 0.0,
     cin_fn_ttc               = 50.0,
     cancer_fn_transform_prob = 1.5e-3,
+    cancer_rate              = 0.001,
     cancer_mortality_rate    = 0.055,
 )
 
@@ -301,13 +310,13 @@ const LR_PARAMS = GenotypeParams(
     dur_precin_std           = 1.0,
     dur_cin_mean             = 3.0,
     dur_cin_std              = 2.0,
-    prog_rate_cin1           = 0.02,
-    prog_rate_cin2           = 0.005,
-    prog_rate_cin3           = 0.001,
+    prog_rate_cin1           = 0.016,
+    prog_rate_cin2           = 0.004,
+    prog_rate_cin3           = 0.0008,
     clearance_rate_inf       = 0.50,
-    clearance_rate_cin1      = 0.35,
-    clearance_rate_cin2      = 0.25,
-    clearance_rate_cin3      = 0.15,
+    clearance_rate_cin1      = 0.42,
+    clearance_rate_cin2      = 0.30,
+    clearance_rate_cin3      = 0.18,
     own_imm                  = 0.90,
     sero_prob                = 0.40,
     dur_precin_par1          = 2.0,
@@ -318,6 +327,7 @@ const LR_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 0.0,
     cin_fn_ttc               = 100.0,
     cancer_fn_transform_prob = 1.0e-6,
+    cancer_rate              = 0.0001,
     cancer_mortality_rate    = 0.02,
 )
 
@@ -329,13 +339,13 @@ const HR_PARAMS = GenotypeParams(
     dur_precin_std           = 1.5,
     dur_cin_mean             = 4.0,
     dur_cin_std              = 2.5,
-    prog_rate_cin1           = 0.06,
-    prog_rate_cin2           = 0.030,
-    prog_rate_cin3           = 0.012,
+    prog_rate_cin1           = 0.048,
+    prog_rate_cin2           = 0.024,
+    prog_rate_cin3           = 0.010,
     clearance_rate_inf       = 0.37,
-    clearance_rate_cin1      = 0.22,
-    clearance_rate_cin2      = 0.16,
-    clearance_rate_cin3      = 0.08,
+    clearance_rate_cin1      = 0.26,
+    clearance_rate_cin2      = 0.19,
+    clearance_rate_cin3      = 0.10,
     own_imm                  = 0.90,
     sero_prob                = 0.60,
     dur_precin_par1          = 2.0,
@@ -346,6 +356,7 @@ const HR_PARAMS = GenotypeParams(
     cin_fn_x_infl            = 10.0,
     cin_fn_ttc               = 50.0,
     cancer_fn_transform_prob = 1.0e-3,
+    cancer_rate              = 0.002,
     cancer_mortality_rate    = 0.05,
 )
 
@@ -357,84 +368,84 @@ const HR_PARAMS = GenotypeParams(
 const HPV31_PARAMS = GenotypeParams(
     name = :hpv31, rel_beta = 0.85,
     dur_precin_mean = 2.5, dur_precin_std = 1.5, dur_cin_mean = 4.5, dur_cin_std = 3.0,
-    prog_rate_cin1 = 0.07, prog_rate_cin2 = 0.035, prog_rate_cin3 = 0.015,
-    clearance_rate_inf = 0.35, clearance_rate_cin1 = 0.20, clearance_rate_cin2 = 0.14, clearance_rate_cin3 = 0.07,
+    prog_rate_cin1 = 0.056, prog_rate_cin2 = 0.028, prog_rate_cin3 = 0.012,
+    clearance_rate_inf = 0.35, clearance_rate_cin1 = 0.24, clearance_rate_cin2 = 0.17, clearance_rate_cin3 = 0.085,
     own_imm = 0.90, sero_prob = 0.60,
     dur_precin_par1 = 2.5, dur_precin_par2 = 9.0, dur_cin_par1 = 4.5, dur_cin_par2 = 20.0,
     cin_fn_k = 0.2, cin_fn_x_infl = 0.0, cin_fn_ttc = 50.0,
-    cancer_fn_transform_prob = 1.5e-3, cancer_mortality_rate = 0.055,
+    cancer_fn_transform_prob = 1.5e-3, cancer_rate = 0.002, cancer_mortality_rate = 0.055,
 )
 
 """HPV-33 (high-risk, 9-valent vaccine)."""
 const HPV33_PARAMS = GenotypeParams(
     name = :hpv33, rel_beta = 0.85,
     dur_precin_mean = 2.5, dur_precin_std = 1.5, dur_cin_mean = 4.5, dur_cin_std = 3.0,
-    prog_rate_cin1 = 0.07, prog_rate_cin2 = 0.035, prog_rate_cin3 = 0.015,
-    clearance_rate_inf = 0.35, clearance_rate_cin1 = 0.20, clearance_rate_cin2 = 0.14, clearance_rate_cin3 = 0.07,
+    prog_rate_cin1 = 0.056, prog_rate_cin2 = 0.028, prog_rate_cin3 = 0.012,
+    clearance_rate_inf = 0.35, clearance_rate_cin1 = 0.24, clearance_rate_cin2 = 0.17, clearance_rate_cin3 = 0.085,
     own_imm = 0.90, sero_prob = 0.60,
     dur_precin_par1 = 2.5, dur_precin_par2 = 9.0, dur_cin_par1 = 4.5, dur_cin_par2 = 20.0,
     cin_fn_k = 0.2, cin_fn_x_infl = 0.0, cin_fn_ttc = 50.0,
-    cancer_fn_transform_prob = 1.5e-3, cancer_mortality_rate = 0.055,
+    cancer_fn_transform_prob = 1.5e-3, cancer_rate = 0.002, cancer_mortality_rate = 0.055,
 )
 
 """HPV-45 (high-risk, 9-valent vaccine)."""
 const HPV45_PARAMS = GenotypeParams(
     name = :hpv45, rel_beta = 0.90,
     dur_precin_mean = 2.5, dur_precin_std = 1.5, dur_cin_mean = 5.0, dur_cin_std = 3.0,
-    prog_rate_cin1 = 0.08, prog_rate_cin2 = 0.04, prog_rate_cin3 = 0.018,
-    clearance_rate_inf = 0.32, clearance_rate_cin1 = 0.19, clearance_rate_cin2 = 0.13, clearance_rate_cin3 = 0.06,
+    prog_rate_cin1 = 0.064, prog_rate_cin2 = 0.032, prog_rate_cin3 = 0.015,
+    clearance_rate_inf = 0.32, clearance_rate_cin1 = 0.23, clearance_rate_cin2 = 0.16, clearance_rate_cin3 = 0.07,
     own_imm = 0.90, sero_prob = 0.62,
     dur_precin_par1 = 2.5, dur_precin_par2 = 9.0, dur_cin_par1 = 5.0, dur_cin_par2 = 20.0,
     cin_fn_k = 0.22, cin_fn_x_infl = 0.0, cin_fn_ttc = 50.0,
-    cancer_fn_transform_prob = 1.8e-3, cancer_mortality_rate = 0.060,
+    cancer_fn_transform_prob = 1.8e-3, cancer_rate = 0.003, cancer_mortality_rate = 0.060,
 )
 
 """HPV-52 (high-risk, 9-valent vaccine)."""
 const HPV52_PARAMS = GenotypeParams(
     name = :hpv52, rel_beta = 0.85,
     dur_precin_mean = 2.5, dur_precin_std = 1.5, dur_cin_mean = 4.5, dur_cin_std = 3.0,
-    prog_rate_cin1 = 0.06, prog_rate_cin2 = 0.03, prog_rate_cin3 = 0.013,
-    clearance_rate_inf = 0.37, clearance_rate_cin1 = 0.22, clearance_rate_cin2 = 0.15, clearance_rate_cin3 = 0.08,
+    prog_rate_cin1 = 0.048, prog_rate_cin2 = 0.024, prog_rate_cin3 = 0.010,
+    clearance_rate_inf = 0.37, clearance_rate_cin1 = 0.26, clearance_rate_cin2 = 0.18, clearance_rate_cin3 = 0.10,
     own_imm = 0.90, sero_prob = 0.58,
     dur_precin_par1 = 2.5, dur_precin_par2 = 9.0, dur_cin_par1 = 4.5, dur_cin_par2 = 20.0,
     cin_fn_k = 0.18, cin_fn_x_infl = 0.0, cin_fn_ttc = 50.0,
-    cancer_fn_transform_prob = 1.4e-3, cancer_mortality_rate = 0.050,
+    cancer_fn_transform_prob = 1.4e-3, cancer_rate = 0.002, cancer_mortality_rate = 0.050,
 )
 
 """HPV-58 (high-risk, 9-valent vaccine)."""
 const HPV58_PARAMS = GenotypeParams(
     name = :hpv58, rel_beta = 0.85,
     dur_precin_mean = 2.5, dur_precin_std = 1.5, dur_cin_mean = 4.5, dur_cin_std = 3.0,
-    prog_rate_cin1 = 0.06, prog_rate_cin2 = 0.03, prog_rate_cin3 = 0.013,
-    clearance_rate_inf = 0.37, clearance_rate_cin1 = 0.22, clearance_rate_cin2 = 0.15, clearance_rate_cin3 = 0.08,
+    prog_rate_cin1 = 0.048, prog_rate_cin2 = 0.024, prog_rate_cin3 = 0.010,
+    clearance_rate_inf = 0.37, clearance_rate_cin1 = 0.26, clearance_rate_cin2 = 0.18, clearance_rate_cin3 = 0.10,
     own_imm = 0.90, sero_prob = 0.58,
     dur_precin_par1 = 2.5, dur_precin_par2 = 9.0, dur_cin_par1 = 4.5, dur_cin_par2 = 20.0,
     cin_fn_k = 0.18, cin_fn_x_infl = 0.0, cin_fn_ttc = 50.0,
-    cancer_fn_transform_prob = 1.4e-3, cancer_mortality_rate = 0.050,
+    cancer_fn_transform_prob = 1.4e-3, cancer_rate = 0.002, cancer_mortality_rate = 0.050,
 )
 
 """HPV-6 (low-risk, causes genital warts)."""
 const HPV6_PARAMS = GenotypeParams(
     name = :hpv6, rel_beta = 0.65,
     dur_precin_mean = 1.5, dur_precin_std = 1.0, dur_cin_mean = 3.0, dur_cin_std = 2.0,
-    prog_rate_cin1 = 0.015, prog_rate_cin2 = 0.003, prog_rate_cin3 = 0.0005,
-    clearance_rate_inf = 0.55, clearance_rate_cin1 = 0.38, clearance_rate_cin2 = 0.28, clearance_rate_cin3 = 0.18,
+    prog_rate_cin1 = 0.012, prog_rate_cin2 = 0.0024, prog_rate_cin3 = 0.0004,
+    clearance_rate_inf = 0.55, clearance_rate_cin1 = 0.46, clearance_rate_cin2 = 0.34, clearance_rate_cin3 = 0.22,
     own_imm = 0.90, sero_prob = 0.45,
     dur_precin_par1 = 2.0, dur_precin_par2 = 10.0, dur_cin_par1 = 0.1, dur_cin_par2 = 0.1,
     cin_fn_k = 0.01, cin_fn_x_infl = 0.0, cin_fn_ttc = 100.0,
-    cancer_fn_transform_prob = 1.0e-6, cancer_mortality_rate = 0.01,
+    cancer_fn_transform_prob = 1.0e-6, cancer_rate = 0.0001, cancer_mortality_rate = 0.01,
 )
 
 """HPV-11 (low-risk, causes genital warts)."""
 const HPV11_PARAMS = GenotypeParams(
     name = :hpv11, rel_beta = 0.60,
     dur_precin_mean = 1.5, dur_precin_std = 1.0, dur_cin_mean = 3.0, dur_cin_std = 2.0,
-    prog_rate_cin1 = 0.015, prog_rate_cin2 = 0.003, prog_rate_cin3 = 0.0005,
-    clearance_rate_inf = 0.52, clearance_rate_cin1 = 0.35, clearance_rate_cin2 = 0.25, clearance_rate_cin3 = 0.15,
+    prog_rate_cin1 = 0.012, prog_rate_cin2 = 0.0024, prog_rate_cin3 = 0.0004,
+    clearance_rate_inf = 0.52, clearance_rate_cin1 = 0.42, clearance_rate_cin2 = 0.30, clearance_rate_cin3 = 0.18,
     own_imm = 0.90, sero_prob = 0.40,
     dur_precin_par1 = 2.0, dur_precin_par2 = 10.0, dur_cin_par1 = 0.1, dur_cin_par2 = 0.1,
     cin_fn_k = 0.01, cin_fn_x_infl = 0.0, cin_fn_ttc = 100.0,
-    cancer_fn_transform_prob = 1.0e-6, cancer_mortality_rate = 0.01,
+    cancer_fn_transform_prob = 1.0e-6, cancer_rate = 0.0001, cancer_mortality_rate = 0.01,
 )
 
 """Registry of default genotype parameters (grouped + individual types)."""

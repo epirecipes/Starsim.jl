@@ -354,13 +354,17 @@ using Statistics: mean
     # ========================================================================
     @testset "HPVNet" begin
         net = HPVNet()
-        @test net isa Starsim.MFNet
+        @test net isa HPVSexualNet
         md = Starsim.module_data(net)
         @test md.name == :sexual
 
         net2 = HPVNet(mean_dur=3.0, name=:sex2)
         md2 = Starsim.module_data(net2)
         @test md2.name == :sex2
+
+        # Non-age-mixing fallback still returns MFNet
+        net3 = HPVNet(use_age_mixing=false)
+        @test net3 isa Starsim.MFNet
     end
 
     # ========================================================================
@@ -581,7 +585,7 @@ using Statistics: mean
     @testset "Duration-based model" begin
         sim = HPVSim(
             genotypes    = SIMPLE_GENOTYPES,
-            n_agents     = 500,
+            n_agents     = 2000,
             start        = 2000.0,
             stop         = 2020.0,
             dt           = 0.25,

@@ -14,10 +14,13 @@ while Python uses event-scheduled binary CIN. We compare aggregate
 metrics (HPV prevalence, CIN prevalence, cancer counts) which should
 be statistically similar given aligned parameters.
 
-Calibration notes:
-  - Julia init_prev=0.12 matches Python's age-structured init_prev (~12% effective)
-  - Julia beta=0.27 compensates for Julia's simpler sexual network vs
-    Python's age-structured multi-layer mixing network
+Calibration notes (v2 — age-assortative network + corrected CIN rates):
+  - Julia now uses HPVSexualNet with age-assortative mixing matching
+    Python's age-structured multi-layer network
+  - CIN progression rates reduced ~20%, clearance rates increased ~20%
+    to match effective CIN dynamics of Python's duration-based model
+  - Separate cancer_rate parameter for CIN3→Cancer (was reusing prog_rate_cin3)
+  - init_prev=0.10 and beta=0.22 recalibrated for the new network
 """
 
 using HPVsim
@@ -37,9 +40,9 @@ const STOP     = START + N_YEARS
 const N_SEEDS  = 20
 const SAMPLE_YEARS = [10, 25, 50]
 
-# Calibrated parameters (see calibration notes above)
-const INIT_PREV  = 0.12   # Matches Python's age-structured ~12% effective init_prev
-const BETA       = 0.27   # Compensates for simpler network vs Python's age-structured mixing
+# Calibrated parameters (v2: age-assortative network + corrected CIN rates)
+const INIT_PREV  = 0.10   # Matches Python's age-structured ~10-12% effective init_prev
+const BETA       = 0.70   # Calibrated for age-assortative HPVSexualNet
 const BIRTH_RATE = 35.0   # Nigeria-like crude birth rate (per 1000/yr)
 const DEATH_RATE = 10.0   # Background mortality (per 1000/yr)
 
@@ -398,15 +401,13 @@ function main()
         end
 
         println()
-        println("  Known architectural differences (secondary metrics):")
+        println("  Notes on architectural differences:")
         println("  • CIN prevalence: Julia uses rate-based CIN1→CIN2→CIN3 stages vs")
-        println("    Python's event-scheduled binary CIN → ~30% higher CIN prevalence")
-        println("  • HPV prev yr25: Julia's crude demographics cause a demographic")
-        println("    transient (susceptible newborns aging into sexual activity) that")
-        println("    Python's age-structured demographics don't produce")
-        println("  • Vaccination reduction: Julia's random-mixing network lacks")
-        println("    age-assortative mixing → weaker herd immunity effect → lower")
-        println("    vaccination impact (67% vs 84% reduction)")
+        println("    Python's event-scheduled binary CIN. Rates now calibrated to")
+        println("    match effective CIN dynamics (v2: ~20% lower prog, ~20% higher clearance)")
+        println("  • Network: Julia now uses HPVSexualNet with age-assortative mixing")
+        println("    matching Python's age-structured multi-layer network")
+        println("  • CIN3→Cancer: now uses separate cancer_rate parameter (was reusing prog_rate_cin3)")
         println("="^90)
     end
 end

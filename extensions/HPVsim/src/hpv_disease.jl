@@ -505,7 +505,7 @@ function _step_cin3_rate!(d::HPVGenotype, sim, active::Vector{Int}, ti::Int, dt:
     ti_f = Float64(ti)
 
     p_clear = 1.0 - (1.0 - gp.clearance_rate_cin3)^dt
-    p_prog  = 1.0 - (1.0 - gp.prog_rate_cin3)^dt
+    p_prog  = 1.0 - (1.0 - gp.cancer_rate)^dt
 
     @inbounds for u in active
         cin3_raw[u] || continue
