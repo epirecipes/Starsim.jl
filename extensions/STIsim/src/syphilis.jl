@@ -31,6 +31,7 @@ mutable struct Syphilis <: Starsim.AbstractInfection
     ti_late_latent::Starsim.StateVector{Float64, Vector{Float64}}
     tertiary::Starsim.StateVector{Bool, Vector{Bool}}
     ti_tertiary::Starsim.StateVector{Float64, Vector{Float64}}
+    ti_dead::Starsim.StateVector{Float64, Vector{Float64}}
     treated::Starsim.StateVector{Bool, Vector{Bool}}
 
     # Parameters
@@ -44,6 +45,8 @@ mutable struct Syphilis <: Starsim.AbstractInfection
     dur_late_latent::Float64
     p_reactivate::Float64
     p_tertiary::Float64
+    p_death::Float64
+    dur_death::Float64         # years, mean time to death from tertiary
     rel_trans_primary::Float64
     rel_trans_secondary::Float64
     rel_trans_latent::Float64          # Baseline latent transmissibility (Python default 1.0)
@@ -64,8 +67,10 @@ function Syphilis(;
     dur_secondary::Real       = 120/365,   # ~4 months
     dur_early_latent::Real    = 1.0,       # ~1 year (matches Python dur_early ≈ 12-14 months)
     dur_late_latent::Real     = 19.0,      # Python: time_to_tertiary ~ Normal(20yr, 2yr) from latent onset
-    p_reactivate::Real        = 0.35,      # Python default: 0.35
-    p_tertiary::Real          = 0.35,      # Python default: 0.35
+    p_reactivate::Real        = 0.35,      # Python default: 0.35 (but effectively disabled in Python)
+    p_tertiary::Real          = 0.35,      # Python default: 0.35 (applied to non-reactivators)
+    p_death::Real             = 0.05,      # Python default: 0.05 (of tertiary cases)
+    dur_death::Real           = 5.0,       # Python default: lognorm_ex(5yr, 5yr)
     rel_trans_primary::Real   = 1.0,       # Python default: 1.0
     rel_trans_secondary::Real = 1.0,       # Python default: 1.0
     rel_trans_latent::Real    = 1.0,       # Python default: 1.0 (decays exponentially)
@@ -86,12 +91,14 @@ function Syphilis(;
         Starsim.FloatState(:ti_late_latent; default=Inf, label="Time late latent"),
         Starsim.BoolState(:tertiary; default=false, label="Tertiary syphilis"),
         Starsim.FloatState(:ti_tertiary; default=Inf, label="Time tertiary"),
+        Starsim.FloatState(:ti_dead; default=Inf, label="Time syphilis death"),
         Starsim.BoolState(:treated; default=false, label="Treated"),
         Float64(beta_m2f), Float64(rel_beta_f2m), Float64(beta_m2m),
         Float64(eff_condom),
         Float64(dur_primary), Float64(dur_secondary),
         Float64(dur_early_latent), Float64(dur_late_latent),
         Float64(p_reactivate), Float64(p_tertiary),
+        Float64(p_death), Float64(dur_death),
         Float64(rel_trans_primary), Float64(rel_trans_secondary),
         Float64(rel_trans_latent), Float64(rel_trans_latent_half_life),
         Float64(rel_trans_tertiary),
@@ -112,7 +119,7 @@ function Starsim.init_pre!(d::Syphilis, sim)
         d.infection.ti_infected, d.infection.rel_sus, d.infection.rel_trans,
         d.primary, d.ti_primary, d.secondary, d.ti_secondary,
         d.early_latent, d.ti_early_latent, d.late_latent, d.ti_late_latent,
-        d.tertiary, d.ti_tertiary, d.treated,
+        d.tertiary, d.ti_tertiary, d.ti_dead, d.treated,
     ]
     for s in states
         Starsim.add_module_state!(sim.people, s)
@@ -194,46 +201,45 @@ function Starsim.step_state!(d::Syphilis, sim)
         if d.secondary.raw[u] && d.ti_early_latent.raw[u] <= ti_f
             d.secondary.raw[u] = false
             d.early_latent.raw[u] = true
-            # Start latent transmissibility at baseline (will decay each timestep)
             d.infection.rel_trans.raw[u] = d.rel_trans_latent
         end
 
-        # Early Latent → Late Latent or reactivation
+        # Early Latent → Late Latent (no reactivation — matching Python's effective behavior)
+        # Python's reactivation condition (ti_latent >= ti) is never satisfiable,
+        # so reactivation never fires. The p_reactivate check is done upfront in
+        # _do_syph_infection! and affects only the tertiary/death scheduling.
         if d.early_latent.raw[u] && d.ti_late_latent.raw[u] <= ti_f
-            if rand(d.rng) < d.p_reactivate
-                d.early_latent.raw[u] = false
-                d.secondary.raw[u] = true
-                d.infection.rel_trans.raw[u] = d.rel_trans_secondary
-                dur_sec_ts = max(1.0, d.dur_secondary / dt + randn(d.rng) * d.dur_secondary * 0.3 / dt)
-                d.ti_early_latent.raw[u] = ti_f + dur_sec_ts
-                dur_el_ts = max(1.0, d.dur_early_latent / dt + randn(d.rng) * d.dur_early_latent * 0.3 / dt)
-                d.ti_late_latent.raw[u] = d.ti_early_latent.raw[u] + dur_el_ts
-            else
-                d.early_latent.raw[u] = false
-                d.late_latent.raw[u] = true
-            end
+            d.early_latent.raw[u] = false
+            d.late_latent.raw[u] = true
         end
 
         # Exponential decay of latent transmissibility (matching Python)
+        # Python uses raw timestep counts for dur_latent with hl=1.0,
+        # effectively giving a half-life of 1 timestep. We match this behavior.
         if d.early_latent.raw[u] || d.late_latent.raw[u]
-            dur_latent_years = (ti_f - d.ti_early_latent.raw[u]) * dt
+            dur_latent_ts = ti_f - d.ti_early_latent.raw[u]
             if d.rel_trans_latent_half_life > 0.0
                 decay_rate = log(2.0) / d.rel_trans_latent_half_life
-                d.infection.rel_trans.raw[u] = d.rel_trans_latent * exp(-decay_rate * dur_latent_years)
+                d.infection.rel_trans.raw[u] = d.rel_trans_latent * exp(-decay_rate * dur_latent_ts)
             else
                 d.infection.rel_trans.raw[u] = d.rel_trans_latent
             end
         end
 
-        # Late Latent → Tertiary (one-time check, matching Python)
+        # Late Latent → Tertiary (deterministic when ti_tertiary arrives)
+        # Branching was already decided at infection time in _do_syph_infection!
         if d.late_latent.raw[u] && d.ti_tertiary.raw[u] <= ti_f
-            if rand(d.rng) < d.p_tertiary
-                d.late_latent.raw[u] = false
-                d.tertiary.raw[u] = true
-                d.infection.rel_trans.raw[u] = d.rel_trans_tertiary
-            else
-                d.ti_tertiary.raw[u] = Inf  # Failed check; stay in late latent permanently
-            end
+            d.late_latent.raw[u] = false
+            d.tertiary.raw[u] = true
+            d.infection.rel_trans.raw[u] = d.rel_trans_tertiary
+        end
+
+        # Tertiary → Death
+        if d.tertiary.raw[u] && d.ti_dead.raw[u] <= ti_f
+            d.infection.infected.raw[u] = false
+            d.tertiary.raw[u] = false
+            sim.people.alive.raw[u] = false
+            sim.people.ti_dead.raw[u] = ti_f
         end
     end
 
@@ -280,9 +286,9 @@ function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Fl
         src = p1[i]; trg = p2[i]; edge_beta = eb[i]; acts = ea[i]
         if inf_raw[src] && sus_raw[trg]
             ba = _get_directional_beta(female_raw[src], female_raw[trg], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
-            beta_per_act = 1.0 - exp(-ba * dt)
-            eff_beta = clamp(beta_per_act * rt_raw[src] * rs_raw[trg], 0.0, 1.0)
-            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+            # Match Python: net_beta first, then multiply by rel_trans/rel_sus
+            net_beta_val = (1.0 - (1.0 - ba)^acts) * edge_beta
+            p = clamp(rt_raw[src] * rs_raw[trg] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_syph_infection!(d, sim, trg, src, ti)
                 new_infections += 1
@@ -290,9 +296,8 @@ function _infect_syph_edges!(d::Syphilis, sim, edges::Starsim.Edges, beta_dt::Fl
         end
         if bidir && inf_raw[trg] && sus_raw[src]
             ba = _get_directional_beta(female_raw[trg], female_raw[src], d.beta_m2f, d.beta_m2f*d.rel_beta_f2m, d.beta_m2m)
-            beta_per_act = 1.0 - exp(-ba * dt)
-            eff_beta = clamp(beta_per_act * rt_raw[trg] * rs_raw[src], 0.0, 1.0)
-            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+            net_beta_val = (1.0 - (1.0 - ba)^acts) * edge_beta
+            p = clamp(rt_raw[trg] * rs_raw[src] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_syph_infection!(d, sim, src, trg, ti)
                 new_infections += 1
@@ -313,19 +318,45 @@ function _do_syph_infection!(d::Syphilis, sim, target::Int, source::Int, ti::Int
     d.ti_primary.raw[target] = Float64(ti)
     d.infection.rel_trans.raw[target] = d.rel_trans_primary
 
-    # Set transition times
+    # Primary → Secondary
     dur_pri_ts = max(1.0, d.dur_primary / dt + randn(d.rng) * d.dur_primary * 0.3 / dt)
     d.ti_secondary.raw[target] = Float64(ti) + dur_pri_ts
 
+    # Secondary → Early Latent
     dur_sec_ts = max(1.0, d.dur_secondary / dt + randn(d.rng) * d.dur_secondary * 0.3 / dt)
     d.ti_early_latent.raw[target] = d.ti_secondary.raw[target] + dur_sec_ts
 
+    # Early Latent → Late Latent
     dur_el_ts = max(1.0, d.dur_early_latent / dt + randn(d.rng) * d.dur_early_latent * 0.3 / dt)
     d.ti_late_latent.raw[target] = d.ti_early_latent.raw[target] + dur_el_ts
 
-    # Python: time_to_tertiary ~ Normal(20yr, 2yr) → relative SD = 0.1
-    dur_ll_ts = max(1.0, d.dur_late_latent / dt + randn(d.rng) * d.dur_late_latent * 0.1 / dt)
-    d.ti_tertiary.raw[target] = d.ti_late_latent.raw[target] + dur_ll_ts
+    # Python branching: decided at entry to latent via set_latent_prognoses
+    # But since reactivation never fires in Python, the effective behavior is:
+    #   - 35% marked for reactivation → stay latent forever (ti_tertiary = Inf)
+    #   - Of remaining 65%, 35% get tertiary → schedule ti_tertiary and maybe ti_dead
+    #   - Remaining ~42% stay latent forever (ti_tertiary = Inf)
+    will_reactivate = rand(d.rng) < d.p_reactivate
+    if will_reactivate
+        # Would reactivate, but reactivation never fires in Python → stay latent forever
+        d.ti_tertiary.raw[target] = Inf
+        d.ti_dead.raw[target] = Inf
+    else
+        will_tertiary = rand(d.rng) < d.p_tertiary
+        if will_tertiary
+            dur_ll_ts = max(1.0, d.dur_late_latent / dt + randn(d.rng) * d.dur_late_latent * 0.1 / dt)
+            d.ti_tertiary.raw[target] = d.ti_late_latent.raw[target] + dur_ll_ts
+            # Tertiary → Death (5% of tertiary cases)
+            if rand(d.rng) < d.p_death
+                dur_death_ts = max(1.0, d.dur_death / dt + randn(d.rng) * d.dur_death * 1.0 / dt)
+                d.ti_dead.raw[target] = d.ti_tertiary.raw[target] + dur_death_ts
+            else
+                d.ti_dead.raw[target] = Inf
+            end
+        else
+            d.ti_tertiary.raw[target] = Inf
+            d.ti_dead.raw[target] = Inf
+        end
+    end
 
     push!(d.infection.infection_sources, (target, source, ti))
     return
@@ -343,6 +374,9 @@ function Starsim.step_die!(d::Syphilis, death_uids::Starsim.UIDs)
     for f in [d.infection.susceptible, d.infection.infected, d.primary, d.secondary,
               d.early_latent, d.late_latent, d.tertiary, d.treated]
         f[death_uids] = false
+    end
+    for u in death_uids.values
+        d.ti_dead.raw[u] = Inf
     end
     return d
 end
@@ -372,8 +406,26 @@ function Starsim.update_results!(d::Syphilis, sim)
     md.results[:n_late_latent][ti]  = Float64(n_ll)
     md.results[:n_tertiary][ti]     = Float64(n_tert)
 
-    n_total = Float64(length(active))
-    md.results[:prevalence][ti] = n_total > 0.0 ? n_inf / n_total : 0.0
+    # Prevalence among sexually active adults (matching Python's definition)
+    # Python: adults = (age >= 15) & (age < 50) & network.active()
+    n_sa = 0; n_inf_sa = 0
+    age_raw = sim.people.age.raw
+    # Access debut state from network
+    debut_raw = nothing
+    for (_, net) in sim.networks
+        if net isa StructuredSexual
+            debut_raw = getfield(net, :debut_state).raw
+            break
+        end
+    end
+    @inbounds for u in active
+        age_u = age_raw[u]
+        if age_u >= 15.0 && age_u < 50.0 && (debut_raw === nothing || age_u > debut_raw[u])
+            n_sa += 1
+            n_inf_sa += d.infection.infected.raw[u]
+        end
+    end
+    md.results[:prevalence][ti] = n_sa > 0 ? Float64(n_inf_sa) / Float64(n_sa) : 0.0
     return d
 end
 

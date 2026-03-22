@@ -310,9 +310,9 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
         if (infected_raw[src] || exposed_raw[src]) && susceptible_raw[trg] && !exposed_raw[trg]
             if infected_raw[src]  # Only infectious (not exposed) can transmit
                 beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
-                beta_per_act = 1.0 - exp(-beta_act * dt)
-                eff_beta = clamp(beta_per_act * rel_trans_raw[src] * rel_sus_raw[trg], 0.0, 1.0)
-                p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+                # Match Python: net_beta first, then multiply by rel_trans/rel_sus
+                net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+                p = clamp(rel_trans_raw[src] * rel_sus_raw[trg] * net_beta_val, 0.0, 1.0)
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, trg, src, ti)
                     new_infections += 1
@@ -324,9 +324,8 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
         if bidir && (infected_raw[trg] || exposed_raw[trg]) && susceptible_raw[src] && !exposed_raw[src]
             if infected_raw[trg]
                 beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
-                beta_per_act = 1.0 - exp(-beta_act * dt)
-                eff_beta = clamp(beta_per_act * rel_trans_raw[trg] * rel_sus_raw[src], 0.0, 1.0)
-                p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+                net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+                p = clamp(rel_trans_raw[trg] * rel_sus_raw[src] * net_beta_val, 0.0, 1.0)
                 if rand(rng) < p
                     _do_seis_infection!(d, sim, src, trg, ti)
                     new_infections += 1

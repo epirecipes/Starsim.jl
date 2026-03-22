@@ -72,7 +72,9 @@ mutable struct HIV <: Starsim.AbstractInfection
     dur_latent::Float64
     dur_falling::Float64
     rel_trans_acute::Float64
+    rel_trans_acute_std::Float64
     rel_trans_falling::Float64
+    rel_trans_falling_std::Float64
     include_aids_deaths::Bool
     art_efficacy::Float64
     art_cd4_growth::Float64
@@ -93,7 +95,9 @@ function HIV(;
     dur_latent::Real        = 10.0,
     dur_falling::Real       = 3.0,
     rel_trans_acute::Real   = 6.0,
+    rel_trans_acute_std::Real = 0.5,   # Python: ss.normal(loc=6, scale=0.5)
     rel_trans_falling::Real = 8.0,
+    rel_trans_falling_std::Real = 0.5, # Python: ss.normal(loc=8, scale=0.5)
     include_aids_deaths::Bool = true,
     art_efficacy::Real      = 0.96,
     art_cd4_growth::Real    = 0.1,
@@ -126,7 +130,8 @@ function HIV(;
         Float64(beta_m2f), Float64(rel_beta_f2m), Float64(beta_m2m),
         Float64(eff_condom), Float64(cd4_start_mean), Float64(cd4_latent_mean),
         Float64(dur_acute), Float64(dur_latent), Float64(dur_falling),
-        Float64(rel_trans_acute), Float64(rel_trans_falling),
+        Float64(rel_trans_acute), Float64(rel_trans_acute_std),
+        Float64(rel_trans_falling), Float64(rel_trans_falling_std),
         include_aids_deaths, Float64(art_efficacy), Float64(art_cd4_growth),
         StableRNG(0),
     )
@@ -207,7 +212,7 @@ function Starsim.init_post!(d::HIV, sim)
         d.cd4_latent.raw[u] = max(100.0, d.cd4_latent_mean + randn(d.rng) * 50.0)
     end
 
-    # Seed initial infections
+    # Seed initial infections with past ti (matching Python: uniform(-120, -5))
     n = length(active)
     n_infect = max(1, Int(round(d.infection.dd.init_prev * n)))
     n_infect = min(n_infect, n)
@@ -217,7 +222,33 @@ function Starsim.init_post!(d::HIV, sim)
 
     infect_uids = Starsim.UIDs(active[randperm(d.rng, n)[1:n_infect]])
     for u in infect_uids.values
-        _do_hiv_infection!(d, sim, u, 0, 1)
+        # Python: ss.uniform(low=-10*12, high=-5) → uniform(-120, -5) timesteps
+        ti_init = rand(d.rng, -120:-5)
+        _do_hiv_infection!(d, sim, u, 0, ti_init)
+    end
+
+    # Advance initial cases to correct disease stage based on past infection time
+    for u in infect_uids.values
+        # Acute → Latent (if past ti_latent)
+        if d.acute.raw[u] && d.ti_latent.raw[u] <= 1.0
+            d.acute.raw[u] = false
+            d.latent.raw[u] = true
+            d.infection.rel_trans.raw[u] = 1.0
+            d.cd4.raw[u] = d.cd4_latent.raw[u]  # CD4 drops to latent level
+        end
+        # Latent → Falling (if past ti_falling)
+        if d.latent.raw[u] && d.ti_falling.raw[u] <= 1.0
+            d.latent.raw[u] = false
+            d.falling.raw[u] = true
+            d.infection.rel_trans.raw[u] = d.rel_trans_falling
+        end
+        # Falling → Dead (if past ti_zero)
+        if d.falling.raw[u] && d.ti_zero.raw[u] <= 1.0
+            d.infection.infected.raw[u] = false
+            d.falling.raw[u] = false
+            sim.people.alive.raw[u] = false
+            sim.people.ti_dead.raw[u] = 1.0
+        end
     end
 
     return d
@@ -250,14 +281,22 @@ function Starsim.step_state!(d::HIV, sim)
         if acute_raw[u] && d.ti_latent.raw[u] <= ti_f
             acute_raw[u] = false
             latent_raw[u] = true
-            d.infection.rel_trans.raw[u] = 1.0  # Reset from acute multiplier
         end
 
         # Latent → Falling
         if latent_raw[u] && !on_art_raw[u] && d.ti_falling.raw[u] <= ti_f
             latent_raw[u] = false
             falling_raw[u] = true
-            d.infection.rel_trans.raw[u] = d.rel_trans_falling
+        end
+
+        # Reset and resample rel_trans every timestep (matching Python)
+        # Python: rel_trans[:] = 1, then *= N(6,0.5) for acute, *= N(8,0.5) for falling
+        if acute_raw[u]
+            d.infection.rel_trans.raw[u] = d.rel_trans_acute + randn(d.rng) * d.rel_trans_acute_std
+        elseif falling_raw[u]
+            d.infection.rel_trans.raw[u] = d.rel_trans_falling + randn(d.rng) * d.rel_trans_falling_std
+        else
+            d.infection.rel_trans.raw[u] = 1.0
         end
 
         # Update CD4
@@ -409,10 +448,9 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
         if infected_raw[src] && susceptible_raw[trg]
             beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[src] ? (1.0 - art_eff) : 1.0
-            # Per-act probability, then compound over acts (matching Python net_beta)
-            beta_per_act = 1.0 - exp(-beta_act * dt)
-            eff_beta = clamp(beta_per_act * rel_trans_raw[src] * trans_mult * rel_sus_raw[trg], 0.0, 1.0)
-            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+            # Match Python: net_beta first, then multiply by rel_trans/rel_sus
+            net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+            p = clamp(rel_trans_raw[src] * trans_mult * rel_sus_raw[trg] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, trg, src, ti)
                 new_infections += 1
@@ -422,9 +460,8 @@ function _infect_hiv_edges!(d::HIV, sim, edges::Starsim.Edges, beta_dt::Float64,
         if bidir && infected_raw[trg] && susceptible_raw[src]
             beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
             trans_mult = on_art_raw[trg] ? (1.0 - art_eff) : 1.0
-            beta_per_act = 1.0 - exp(-beta_act * dt)
-            eff_beta = clamp(beta_per_act * rel_trans_raw[trg] * trans_mult * rel_sus_raw[src], 0.0, 1.0)
-            p = (1.0 - (1.0 - eff_beta)^acts) * edge_beta
+            net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+            p = clamp(rel_trans_raw[trg] * trans_mult * rel_sus_raw[src] * net_beta_val, 0.0, 1.0)
             if rand(rng) < p
                 _do_hiv_infection!(d, sim, src, trg, ti)
                 new_infections += 1
@@ -445,7 +482,7 @@ function _do_hiv_infection!(d::HIV, sim, target::Int, source::Int, ti::Int)
     # Acute phase
     d.acute.raw[target] = true
     d.ti_acute.raw[target] = Float64(ti)
-    d.infection.rel_trans.raw[target] = d.rel_trans_acute
+    d.infection.rel_trans.raw[target] = d.rel_trans_acute + randn(d.rng) * d.rel_trans_acute_std
 
     # CD4 at infection start
     cd4_init = d.cd4_start_mean + randn(d.rng) * 50.0

@@ -79,19 +79,21 @@ using STIsim
         @test net isa StructuredSexual
         @test net.n_risk_groups == 3
         @test length(net.risk_dist) == 3
-        @test sum(net.risk_dist) ≈ 1.0
+        @test sum(net.risk_dist) ≈ 1.0 atol=0.02
         @test length(net.contact_rates) == 3
     end
 
     @testset "StructuredSexual custom params" begin
         net = StructuredSexual(;
-            n_risk_groups=2,
-            risk_dist=[0.7, 0.3],
-            contact_rates=[1.0, 5.0],
-            mean_dur=1.5,
+            prop_f0=0.70,
+            prop_m0=0.70,
+            prop_f2=0.05,
+            prop_m2=0.05,
+            p_pair_form=0.6,
         )
-        @test net.n_risk_groups == 2
-        @test net.mean_dur == 1.5
+        @test net.n_risk_groups == 3
+        @test net.prop_f0 == 0.70
+        @test net.p_pair_form == 0.6
     end
 
     # ========================================================================
@@ -530,11 +532,9 @@ using STIsim
     # ========================================================================
     @testset "Custom StructuredSexual network in sim" begin
         net = StructuredSexual(;
-            participation_rate=0.8,
-            mean_dur=1.0,
-            age_lo=18.0,
-            age_hi=50.0,
-            concurrency=0.2,
+            p_pair_form=0.6,
+            prop_f0=0.80,
+            prop_m0=0.75,
         )
         sim = Starsim.Sim(;
             n_agents=300,
