@@ -298,6 +298,11 @@ end
 Calculate disease susceptibilities using bitmask matching.
 For each disease, determines the type of immunity match for each agent
 and applies the corresponding efficacy × decay factor.
+
+Uses c.final_decayed_factor as a cross-disease accumulator within each timestep
+(reset to 0.0 in _reset_decay_factors!), matching Python rotasim where
+final_decayed_immunity_factor carries forward across disease iterations. This
+provides cross-protection for complete heterotypic immunity (no shared G or P).
 """
 function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
     active = sim.people.auids.values
@@ -307,6 +312,7 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
     p_bits_raw      = c.exposed_P_bitmask.raw
     has_imm_raw     = c.has_immunity.raw
     homo_decay_raw  = c.homotypic_decay_factor.raw
+    final_raw       = c.final_decayed_factor.raw
 
     # Pre-extract all strain decay raw arrays into an indexable vector
     gp_keys = collect(keys(c.strain_decay_states))
@@ -343,8 +349,9 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
 
             if has_exact
                 efficacy = c.homotypic_efficacy
-                # Use this disease's per-strain decay (not shared homo factor)
                 decay = disease_strain_idx !== nothing ? strain_raw_arrays[disease_strain_idx][u] : 0.0
+                # Update accumulator for subsequent diseases' complete hetero
+                final_raw[u] = decay
             else
                 has_g = (g_bits_raw[u] & g_mask) != 0
                 has_p = (p_bits_raw[u] & p_mask) != 0
@@ -358,11 +365,16 @@ function _calculate_disease_susceptibilities!(c::RotaImmunityConnector, sim)
                             decay = v
                         end
                     end
+                    # Update accumulator for subsequent diseases' complete hetero
+                    if decay > final_raw[u]
+                        final_raw[u] = decay
+                    end
                 else
-                    # Complete heterotypic: no shared G or P types.
-                    # Match Python: decay stays 0.0 (no cross-immunity for unrelated strains)
+                    # Complete heterotypic: use accumulator value from earlier
+                    # disease iterations (e.g., an exact match), or 0.0 if no
+                    # prior disease set it this timestep.
                     efficacy = c.complete_hetero_efficacy
-                    decay = 0.0
+                    decay = final_raw[u]
                 end
             end
 

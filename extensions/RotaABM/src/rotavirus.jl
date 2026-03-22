@@ -195,6 +195,17 @@ function Starsim.init_post!(d::Rotavirus, sim)
         d.n_infections.raw[u] += 1.0
     end
 
+    # Notify immunity connector about initial infections so num_current_infections
+    # is accurate. Without this, record_recovery! decrements to -1, causing
+    # co-infection detection to miss agents and undercount reassortment events.
+    # Matches Python rotasim which calls immunity_connector.record_infection() in init.
+    conn = d.immunity_connector
+    if conn !== nothing
+        for u in infect_uids.values
+            record_infection!(conn, d, u)
+        end
+    end
+
     return d
 end
 
