@@ -385,22 +385,24 @@ function _check_migration!(d::HPVLocationDemographics, sim, year::Float64)
     for is_female_sex in [false, true]
         expected = is_female_sex ? expected_female : expected_male
 
-        # Count current agents by integer age
+        # Count current ALIVE agents by integer age
+        # Skip agents already scheduled to die (ti_dead <= current ti),
+        # matching Python where remove_people sets alive=False before migration runs
+        current_ti = Float64(Starsim.module_data(d).t.ti)
         count_ages = zeros(Int, n_ages)
         age_uids = [Int[] for _ in 1:n_ages]  # UIDs per age bin
         for u in people.auids.values
             people.female.raw[u] == is_female_sex || continue
+            people.ti_dead.raw[u] <= current_ti && continue  # already dead
             age_int = min(Int(floor(people.age.raw[u])), n_ages - 1)
             ai = age_int + 1  # 1-indexed
             count_ages[ai] += 1
             push!(age_uids[ai], u)
         end
 
-        # Compute expected counts at sim scale
-        expected_scaled = [Int(floor(expected[ai] * scale)) for ai in 1:n_ages]
-
         # Compute difference: positive = need immigration, negative = need emigration
-        difference = [expected_scaled[ai] - count_ages[ai] for ai in 1:n_ages]
+        # Match Python: (expected_float - count_int).astype(int) truncates toward zero
+        difference = [Int(trunc(expected[ai] * scale - count_ages[ai])) for ai in 1:n_ages]
 
         # Immigration: add agents at ages where we have too few
         for ai in 1:n_ages

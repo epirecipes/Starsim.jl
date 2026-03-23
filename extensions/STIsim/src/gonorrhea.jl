@@ -10,7 +10,7 @@ Neisseria gonorrhoeae SEIS model. Wraps the base SEIS with
 gonorrhea-specific default parameters matching Python stisim.
 
 # Keyword arguments
-- `init_prev::Real` — initial prevalence (default 0.02)
+- `init_prev::Real` — initial prevalence (default 0.01)
 - `beta_m2f::Real` — per-act m→f (default 0.06)
 - `rel_beta_f2m::Real` — relative f→m (default 0.5)
 - `beta_m2m::Real` — per-act MSM (default 0.06)
@@ -18,11 +18,11 @@ gonorrhea-specific default parameters matching Python stisim.
 - `p_symp_f::Real` — symptomatic probability female (default 0.35)
 - `p_symp_m::Real` — symptomatic probability male (default 0.65)
 - `dur_inf::Real` — fallback infection duration in years (default 0.5)
-- `p_pid::Real` — PID probability (default 0.15)
+- `p_pid::Real` — PID probability (default 0.0; Python stisim default)
 """
 function Gonorrhea(;
     name::Symbol       = :gonorrhea,
-    init_prev::Real    = 0.02,
+    init_prev::Real    = 0.01,
     beta_m2f::Real     = 0.06,
     rel_beta_f2m::Real = 0.5,
     beta_m2m::Real     = 0.06,
@@ -31,7 +31,7 @@ function Gonorrhea(;
     p_symp_m::Real     = 0.65,
     dur_inf::Real      = 0.5,
     dur_inf_std::Real  = 0.1,
-    p_pid::Real        = 0.15,
+    p_pid::Real        = 0.0,
     eff_condom::Real   = 0.9,
     # Sex-specific clearance (years) — Python: months(X)/12
     dur_asymp2clear_f::Real     = 8.0/12,   # months(8)

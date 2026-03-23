@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "1e1ff3107256117a42bc8bcd5ad923bedd419a9c"
+project_hash = "22087a6ec10c068529c4193fcfe5c2d5d25c6c11"
 
 [[deps.ACSets]]
 deps = ["AlgebraicInterfaces", "Base64", "CompTime", "DataStructures", "JSON3", "MLStyle", "OrderedCollections", "PEG", "Permutations", "Pkg", "PrettyTables", "Random", "Reexport", "SHA", "StaticArrays", "StructEquality", "StructTypes", "Tables"]
@@ -768,6 +768,12 @@ version = "0.5.1+0"
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
+[[deps.STIsim]]
+deps = ["Distributions", "JSON", "JSON3", "OrderedCollections", "Random", "StableRNGs", "Starsim", "Statistics"]
+path = "extensions/STIsim"
+uuid = "c3d4e5f6-a7b8-9012-cdef-345678901234"
+version = "0.1.0"
+
 [[deps.ScopedValues]]
 deps = ["HashArrayMappedTries", "Logging"]
 git-tree-sha1 = "ac4b837d89a58c848e85e698e2a2514e9d59d8f6"
@@ -835,7 +841,7 @@ uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
 version = "1.0.4"
 
 [[deps.Starsim]]
-deps = ["Catlab", "DataFrames", "Distributions", "FunctionWrappers", "Graphs", "JSON3", "LinearAlgebra", "Metal", "OrderedCollections", "Printf", "PyCall", "Random", "RecipesBase", "Serialization", "SparseArrays", "StableRNGs", "Statistics"]
+deps = ["Catlab", "DataFrames", "Distributions", "FunctionWrappers", "Graphs", "JSON", "JSON3", "LinearAlgebra", "Metal", "OrderedCollections", "Printf", "PyCall", "Random", "RecipesBase", "STIsim", "Serialization", "SparseArrays", "StableRNGs", "Statistics"]
 path = "."
 uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 version = "0.1.0"

@@ -211,7 +211,9 @@ function Starsim.step!(net::HPVSexualNet, sim)
     _grow_for_new_agents!(net, sim.people)
 
     if !net.initial_partnerships_formed
-        # Deferred from init_pre! to ensure demographics have set correct ages
+        # Python hpvsim creates partnerships at initialize() (~700 edges)
+        # then dissolve+create at step 0. We form once here (matching Python's
+        # init), then the normal dissolve+create cycle handles subsequent steps.
         for lk in LAYER_ORDER
             haskey(net.layers, lk) || continue
             _form_new_partnerships!(net, lk, sim.people, now, dt)
@@ -364,7 +366,7 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
     active = people.auids.values
     bins = net.age_bins
     nb = length(bins)
-    mm = net.mixing_matrices[lk]
+    mm = net.mixing_matrices[lk]  # mm[male_bin, female_bin]
     rng = net.rng
     f_part = net.female_participation[lk]
     m_part = net.male_participation[lk]
@@ -375,12 +377,12 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
     # Cross-layer concurrency: check if agent has partners in OTHER layers
     other_layers = [olK for olK in keys(net.layers) if olK != lk]
 
-    male_eligible   = [Int[] for _ in 1:nb]
-    female_eligible = [Int[] for _ in 1:nb]
+    # -- Step 1: determine eligible agents --
+    f_eligible_all = Int[]
+    m_eligible_all = Int[]
 
     @inbounds for u in active
         age = people.age.raw[u]
-        # Per-agent debut age (drawn from sex-specific Normal at init)
         u > length(debut_ages) && continue
         age < debut_ages[u] && continue
         u > length(cur) && continue
@@ -400,58 +402,89 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
             rand(rng) < cross_prob || continue
         end
 
-        bi = _age_bin_index(age, bins)
         if people.female.raw[u]
-            rate = bi <= length(f_part) ? f_part[bi] : 0.0
-            rand(rng) < rate && push!(female_eligible[bi], u)
+            push!(f_eligible_all, u)
         else
-            rate = bi <= length(m_part) ? m_part[bi] : 0.0
-            rand(rng) < rate && push!(male_eligible[bi], u)
+            push!(m_eligible_all, u)
         end
     end
 
-    new_p1 = Int[]
-    new_p2 = Int[]
-    male_taken = Set{Int}()
+    # -- Step 2: participation filter for males (globally, matching Python) --
+    m_participants = Int[]
+    m_age_bins = Int[]  # 1-based age bin index for each participating male
+    for u in m_eligible_all
+        bi = _age_bin_index(people.age.raw[u], bins)
+        rate = bi <= length(m_part) ? m_part[bi] : 0.0
+        if rand(rng) < rate
+            push!(m_participants, u)
+            push!(m_age_bins, bi)
+        end
+    end
 
-    for mi in 1:nb
-        males = male_eligible[mi]
-        isempty(males) && continue
-        shuffle!(rng, males)
+    # -- Step 3: participation filter for females → bin them --
+    f_participants = Int[]
+    f_age_bins_arr = Int[]
+    for u in f_eligible_all
+        bi = _age_bin_index(people.age.raw[u], bins)
+        rate = bi <= length(f_part) ? f_part[bi] : 0.0
+        if rand(rng) < rate
+            push!(f_participants, u)
+            push!(f_age_bins_arr, bi)
+        end
+    end
 
-        for m_uid in males
-            m_uid in male_taken && continue
+    # -- Step 4: female-driven matching (matching Python's create_edgelist direction) --
+    # Iterate through female age bins in shuffled order. Each female picks a male
+    # from the weighted pool. Males are removed after selection. This matches
+    # Python's direction (female-driven) while using sequential draws for
+    # efficiency.
+    n_m = length(m_participants)
+    m_available = trues(n_m)  # availability flags for participating males
 
+    new_p1 = Int[]  # male UIDs
+    new_p2 = Int[]  # female UIDs
+
+    # Build female lists per age bin
+    f_bin_lists = [Int[] for _ in 1:nb]
+    for (i, bi) in enumerate(f_age_bins_arr)
+        push!(f_bin_lists[bi], f_participants[i])
+    end
+
+    # Shuffle female order within each bin, then iterate bins in shuffled order
+    bin_order = [bi for bi in 1:nb if !isempty(f_bin_lists[bi])]
+    shuffle!(rng, bin_order)
+
+    for fi in bin_order
+        fems = f_bin_lists[fi]
+        shuffle!(rng, fems)
+
+        for f_uid in fems
+            # Compute weights: mixing[male_bin, fi] * availability
             total_w = 0.0
-            @inbounds for fi in 1:nb
-                total_w += mm[mi, fi] * length(female_eligible[fi])
+            @inbounds for j in 1:n_m
+                m_available[j] || continue
+                total_w += mm[m_age_bins[j], fi]
             end
             total_w <= 0.0 && continue
 
+            # Draw a male proportional to mixing weights
             target = rand(rng) * total_w
             cum = 0.0
-            fi_sel = 1
-            @inbounds for fi in 1:nb
-                cum += mm[mi, fi] * length(female_eligible[fi])
-                if target <= cum
-                    fi_sel = fi
+            m_idx = 0
+            @inbounds for j in 1:n_m
+                m_available[j] || continue
+                cum += mm[m_age_bins[j], fi]
+                if cum >= target
+                    m_idx = j
                     break
                 end
             end
+            m_idx == 0 && continue
 
-            fems = female_eligible[fi_sel]
-            isempty(fems) && continue
-
-            f_idx = rand(rng, 1:length(fems))
-            f_uid = fems[f_idx]
-
+            m_uid = m_participants[m_idx]
             push!(new_p1, m_uid)
             push!(new_p2, f_uid)
-            push!(male_taken, m_uid)
-
-            # Remove female from pool
-            fems[f_idx] = fems[end]; pop!(fems)
-
+            m_available[m_idx] = false  # remove from pool
             cur[m_uid] += 1
             cur[f_uid] += 1
         end

@@ -10,7 +10,7 @@ Chlamydia trachomatis SEIS model. Wraps the base SEIS with
 chlamydia-specific default parameters matching Python stisim.
 
 # Keyword arguments
-- `init_prev::Real` — initial prevalence (default 0.03)
+- `init_prev::Real` — initial prevalence (default 0.01)
 - `beta_m2f::Real` — per-act male-to-female (default 0.06)
 - `rel_beta_f2m::Real` — relative female-to-male (default 0.5)
 - `beta_m2m::Real` — per-act MSM (default 0.06)
@@ -18,12 +18,12 @@ chlamydia-specific default parameters matching Python stisim.
 - `p_symp_f::Real` — symptomatic probability female (default 0.20)
 - `p_symp_m::Real` — symptomatic probability male (default 0.54)
 - `dur_inf::Real` — fallback infection duration in years (default 1.0)
-- `p_pid::Real` — PID probability (default 0.2)
+- `p_pid::Real` — PID probability (default 0.0; Python stisim default)
 - `eff_condom::Real` — condom efficacy (default 0.0; Python stisim default)
 """
 function Chlamydia(;
     name::Symbol       = :chlamydia,
-    init_prev::Real    = 0.03,
+    init_prev::Real    = 0.01,
     beta_m2f::Real     = 0.06,
     rel_beta_f2m::Real = 0.5,
     beta_m2m::Real     = 0.06,
@@ -32,7 +32,7 @@ function Chlamydia(;
     p_symp_m::Real     = 0.54,
     dur_inf::Real      = 1.0,
     dur_inf_std::Real  = 0.1,
-    p_pid::Real        = 0.2,
+    p_pid::Real        = 0.0,
     eff_condom::Real   = 0.0,
     # Sex-specific clearance (years) — Python: months(X)/12
     dur_asymp2clear_f::Real     = 18.0/12,  # months(18)

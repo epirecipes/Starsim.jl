@@ -324,11 +324,11 @@ function Starsim.init_post!(d::HPVGenotype, sim)
     return d
 end
 
-"""Initialize individual relative severity (heterogeneity factor)."""
+"""Initialize individual relative severity (heterogeneity factor).
+Python hpvsim: sev_dist = normal_pos(par1=1, par2=0.2) → abs(Normal(1, 0.2))"""
 function _init_rel_sev!(d::HPVGenotype, active::Vector{Int})
     @inbounds for u in active
-        # Draw from truncated normal centered at 1.0 with small variance
-        d.rel_sev.raw[u] = max(0.2, 1.0 + 0.3 * randn(d.rng))
+        d.rel_sev.raw[u] = abs(1.0 + 0.2 * randn(d.rng))
     end
     return
 end
@@ -371,6 +371,10 @@ function _set_prognosis!(d::HPVGenotype, uid::Int, ti::Int, dt::Float64, sim)
 
         # Sample CIN duration (returned in years)
         dc = sample_lognormal_duration(rng, gp.dur_cin_par1, gp.dur_cin_par2)
+        # Apply age_risk: dur_cin *= 2 for agents aged >= 30 (matching Python hpvsim)
+        if sim.people.age.raw[uid] >= 30.0
+            dc *= 2.0
+        end
         d.dur_cin.raw[uid] = dc
 
         # Compute cancer probability from CIN duration
@@ -824,9 +828,13 @@ function _do_hpv_infection!(d::HPVGenotype, sim, target::Int, source::Int, ti::I
     # Reset cleared state
     d.cleared.raw[target] = false
 
-    # Initialize rel_sev if not yet set
-    if d.rel_sev.raw[target] <= 0.0
-        d.rel_sev.raw[target] = max(0.2, 1.0 + 0.3 * randn(d.rng))
+    # Initialize rel_sev for agents that still have the default value (1.0).
+    # Python samples rel_sev = abs(Normal(1, 0.2)) at agent creation for ALL agents;
+    # Julia uses default=1.0 and resamples here at first infection. Since _init_rel_sev!
+    # always produces values ≠ 1.0 (with Float64 probability 1), checking == 1.0
+    # correctly identifies newborn agents whose rel_sev hasn't been sampled yet.
+    if d.rel_sev.raw[target] == 1.0
+        d.rel_sev.raw[target] = abs(1.0 + 0.2 * randn(d.rng))
     end
 
     # Log infection
