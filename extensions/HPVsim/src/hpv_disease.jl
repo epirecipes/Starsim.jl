@@ -250,14 +250,31 @@ function Starsim.init_post!(d::HPVGenotype, sim)
     n_genotypes = length(all_genotypes)
 
     # Draw total HPV status using age-structured prevalence (scale=1.0)
+    # Python hpvsim filters: hpv_probs[~self.people.is_active] = 0
+    # is_active = (age > debut) * alive * level0
+    # Only sexually active people can be initially infected.
     age_brackets = DEFAULT_INIT_PREV_AGE_BRACKETS
     prev_m = DEFAULT_INIT_PREV_MALE
     prev_f = DEFAULT_INIT_PREV_FEMALE
+
+    # Get debut ages from the sexual network (matching Python's is_active filter)
+    debut_ages = nothing
+    for (_, net) in sim.networks
+        if net isa HPVSexualNet
+            debut_ages = net.debut_ages
+            break
+        end
+    end
 
     hpv_positive = Int[]
     @inbounds for u in active
         age = people.age.raw[u]
         is_female = people.female.raw[u]
+
+        # Filter: only sexually active people (age > debut) can be initially infected
+        if debut_ages !== nothing && age <= debut_ages[u]
+            continue
+        end
 
         bracket_prev = 0.0
         for bi in eachindex(age_brackets)
