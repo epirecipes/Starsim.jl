@@ -226,9 +226,14 @@ function Starsim.step!(net::HPVSexualNet, sim)
         return net
     end
 
+    # Match Python: dissolve ALL layers first, then form ALL layers.
+    # Cross-layer eligibility depends on partnership state at formation time.
     for lk in LAYER_ORDER
         haskey(net.layers, lk) || continue
         _dissolve_partnerships!(net, lk, sim.people, now)
+    end
+    for lk in LAYER_ORDER
+        haskey(net.layers, lk) || continue
         _form_new_partnerships!(net, lk, sim.people, now, dt)
     end
     _rebuild_edges!(net, sim.people)
@@ -536,7 +541,7 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
         push!(layer.acts, scaled_acts)
         push!(layer.dur, dur_drawn)
         push!(layer.start_time, now)
-        push!(layer.end_time, now + dur_drawn * dt)
+        push!(layer.end_time, now + dur_drawn)
     end
     return
 end
