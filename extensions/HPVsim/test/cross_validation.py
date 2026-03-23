@@ -80,6 +80,7 @@ def scenario1():
         start     = START,
         rand_seed = SEED,
         verbose   = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia (no multiscale implementation)
     )
     sim.run()
 
@@ -106,6 +107,7 @@ def scenario2():
         start     = START,
         rand_seed = SEED,
         verbose   = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia
     )
     sim.run()
 
@@ -136,6 +138,7 @@ def scenario3():
         start     = START,
         rand_seed = SEED,
         verbose   = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia
     )
     sim_base.run()
     res_base = extract_results(sim_base)
@@ -155,6 +158,7 @@ def scenario3():
         start         = START,
         rand_seed     = SEED,
         verbose       = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia
         interventions = [vx],
     )
     sim_vx.run()
@@ -195,6 +199,7 @@ def scenario4():
         start     = START,
         rand_seed = SEED,
         verbose   = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia
     )
     sim_base.run()
     res_base = extract_results(sim_base)
@@ -242,6 +247,7 @@ def scenario4():
         start         = START,
         rand_seed     = SEED,
         verbose       = 0,
+        ms_agent_ratio = 1,  # Disable multiscale to match Julia
         interventions = [screen, assign_tx, ablation, excision],
     )
     sim_scr.run()

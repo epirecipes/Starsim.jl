@@ -911,24 +911,27 @@ function Starsim.update_results!(d::HPVGenotype, sim)
     ti = md.t.ti
     ti > length(md.results[:n_susceptible].values) && return d
 
-    active = sim.people.auids.values
-    sus_raw  = d.infection.susceptible.raw
-    inf_raw  = d.infection.infected.raw
-    c1_raw   = d.cin1.raw
-    c2_raw   = d.cin2.raw
-    c3_raw   = d.cin3.raw
-    ca_raw   = d.cancerous.raw
-    cl_raw   = d.cleared.raw
+    active     = sim.people.auids.values
+    sus_raw    = d.infection.susceptible.raw
+    inf_raw    = d.infection.infected.raw
+    c1_raw     = d.cin1.raw
+    c2_raw     = d.cin2.raw
+    c3_raw     = d.cin3.raw
+    ca_raw     = d.cancerous.raw
+    cl_raw     = d.cleared.raw
+    female_raw = sim.people.female.raw
 
     n_sus = 0; n_inf = 0; n_c1 = 0; n_c2 = 0; n_c3 = 0; n_ca = 0; n_cl = 0
+    n_female = 0
     @inbounds for u in active
-        n_sus += sus_raw[u]
-        n_inf += inf_raw[u]
-        n_c1  += c1_raw[u]
-        n_c2  += c2_raw[u]
-        n_c3  += c3_raw[u]
-        n_ca  += ca_raw[u]
-        n_cl  += cl_raw[u]
+        n_sus    += sus_raw[u]
+        n_inf    += inf_raw[u]
+        n_c1     += c1_raw[u]
+        n_c2     += c2_raw[u]
+        n_c3     += c3_raw[u]
+        n_ca     += ca_raw[u]
+        n_cl     += cl_raw[u]
+        n_female += female_raw[u]
     end
 
     md.results[:n_susceptible][ti] = Float64(n_sus)
@@ -940,9 +943,13 @@ function Starsim.update_results!(d::HPVGenotype, sim)
     md.results[:n_cleared][ti]     = Float64(n_cl)
 
     n_total = Float64(length(active))
-    md.results[:prevalence][ti] = n_total > 0.0 ? n_inf / n_total : 0.0
+    # HPV prevalence excludes cancerous (matching Python: cancerous → inactive, not infectious)
+    n_infectious = Float64(n_inf - n_ca)
+    md.results[:prevalence][ti] = n_total > 0.0 ? n_infectious / n_total : 0.0
+    # CIN prevalence uses female denominator (matching Python: n_cin / alive_females)
     n_cin_total = Float64(n_c1 + n_c2 + n_c3)
-    md.results[:cin_prevalence][ti] = n_total > 0.0 ? n_cin_total / n_total : 0.0
+    n_f = Float64(n_female)
+    md.results[:cin_prevalence][ti] = n_f > 0.0 ? n_cin_total / n_f : 0.0
     return d
 end
 

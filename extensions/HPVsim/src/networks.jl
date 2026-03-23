@@ -211,9 +211,8 @@ function Starsim.step!(net::HPVSexualNet, sim)
     _grow_for_new_agents!(net, sim.people)
 
     if !net.initial_partnerships_formed
-        # Python hpvsim creates partnerships at initialize() (~700 edges)
-        # then dissolve+create at step 0. We form once here (matching Python's
-        # init), then the normal dissolve+create cycle handles subsequent steps.
+        # Python hpvsim creates partnerships during make_people() and again at step 0.
+        # Julia forms once here, then the normal dissolve+create cycle handles subsequent steps.
         for lk in LAYER_ORDER
             haskey(net.layers, lk) || continue
             _form_new_partnerships!(net, lk, sim.people, now, dt)
@@ -522,8 +521,8 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
             p_nb = d2 / (d1 + d2)
             max(dt, Float64(rand(rng, NegativeBinomial(d2, p_nb))))
         else
-            # Python hpvsim: par1=mean, par2=std of the lognormal distribution
-            # Convert to underlying normal parameters (matching hpu.sample)
+            # Python hpvsim hpu.sample: par1=mean, par2=std of the lognormal distribution
+            # Convert to underlying normal parameters (matching lines 311-312 of hpvsim/utils.py)
             mu    = log(d1^2 / sqrt(d2^2 + d1^2))
             sigma = sqrt(log(d2^2 / d1^2 + 1))
             max(dt, rand(rng, LogNormal(mu, sigma)))
@@ -535,6 +534,9 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
         avg_age   = (people.age.raw[m_uid] + people.age.raw[f_uid]) / 2.0
         avg_debut = (net.debut_ages[m_uid] + net.debut_ages[f_uid]) / 2.0
         scaled_acts = age_scale_acts(acts_drawn, avg_age, avg_debut, peak, retire, d_ratio, r_ratio)
+
+        # Python filters out zero-act partnerships: keep_inds = scaled_acts > 0
+        scaled_acts <= 0.0 && continue
 
         push!(layer.p1, m_uid)
         push!(layer.p2, f_uid)
