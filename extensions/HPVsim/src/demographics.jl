@@ -63,6 +63,9 @@ function HPVLocationDemographics(;
     md = Starsim.ModuleData(name; label="Location demographics ($location)")
 
     # Load data for location
+    # Note: age_dist is set to a placeholder here; the correct year-specific
+    # distribution is selected in init_pre! using sim.pars.start, matching
+    # Python hpvsim which calls get_age_distribution(location, year=sim['start']).
     if location == :nigeria
         birth_years = NIGERIA_BIRTH_YEARS
         birth_rates = NIGERIA_BIRTH_RATES
@@ -70,7 +73,7 @@ function HPVLocationDemographics(;
         death_f = NIGERIA_DEATH_F
         death_m = NIGERIA_DEATH_M
         death_age_bins = DEATH_RATE_AGE_BINS
-        age_dist = NIGERIA_AGE_DIST_1995
+        age_dist = NIGERIA_AGE_DIST_2000  # Default to 2000; overridden in init_pre!
         pop_trend_years = NIGERIA_POP_TREND_YEARS
         pop_trend_sizes = NIGERIA_POP_TREND_SIZES
         age_trend_years = NIGERIA_AGE_TREND_YEARS
@@ -108,6 +111,10 @@ function Starsim.init_pre!(d::HPVLocationDemographics, sim)
     d.rng = StableRNG(sim.pars.rand_seed + hash(:location_demographics))
     d._step_counter = 0
     d._update_freq = max(1, Int(round(d.dt_demog / sim.pars.dt)))
+
+    # Select age distribution for the sim start year (matching Python:
+    # age_data = hpdata.get_age_distribution(location, year=sim['start']))
+    d.age_dist = get_nigeria_age_dist(sim.pars.start)
 
     # Compute pop_scale: n_agents / data_pop(start_year)
     if d.use_migration && !isempty(d.pop_trend_years)

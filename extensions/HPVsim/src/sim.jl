@@ -213,7 +213,15 @@ function HPVSim(;
     diseases = HPVGenotype[]
     for gd in genotype_defs
         gp = get_genotype_params(gd.name)
-        # Apply overrides
+        # Apply overrides from GenotypeDef kwargs
+        if !isempty(gd.overrides)
+            fields = fieldnames(GenotypeParams)
+            kw = Dict{Symbol, Any}()
+            for f in fields
+                kw[f] = haskey(gd.overrides, f) ? gd.overrides[f] : getfield(gp, f)
+            end
+            gp = GenotypeParams(; kw...)
+        end
         push!(diseases, HPVGenotype(;
             genotype = gd.name,
             init_prev = gd.init_prev,
