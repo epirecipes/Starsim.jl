@@ -508,15 +508,31 @@ export SIR, infect!, validate_beta!
 """
     SIS <: AbstractInfection
 
-SIS disease model — agents return to susceptible after recovery.
+SIS disease model with waning immunity — matching Python starsim's SIS.
+
+After recovery, agents gain temporary immunity (`imm_boost`) that wanes
+exponentially at rate `waning` per year. Agents become re-susceptible as
+immunity decays (rel_sus = max(0, 1 - immunity)).
 
 # Keyword arguments
-- Same as `SIR` (except no permanent recovery)
+- `name::Symbol`: disease name (default `:sis`)
+- `init_prev::Real`: initial prevalence fraction (default 0.01)
+- `beta::Union{Real,Dict}`: transmission rate per year (default 0.05)
+- `dur_inf::Real`: mean infectious duration in years (default 10.0)
+- `waning::Real`: immunity waning rate per year (default 0.05)
+- `imm_boost::Real`: immunity boost on infection (default 1.0)
+- `p_death::Real`: probability of death on recovery (default 0.0)
+- `recovery_dist::Symbol`: duration distribution (:lognormal or :exponential)
 """
 mutable struct SIS <: AbstractInfection
     infection::InfectionData
+    ti_recovered::StateVector{Float64, Vector{Float64}}
+    immunity::StateVector{Float64, Vector{Float64}}
     dur_inf::Float64
+    waning::Float64
+    imm_boost::Float64
     p_death::Float64
+    recovery_dist::Symbol
     rng::StableRNG
 end
 
@@ -525,10 +541,18 @@ function SIS(;
     init_prev::Real = 0.01,
     beta::Union{Real, Dict} = 0.05,
     dur_inf::Real = 10.0,
+    waning::Real = 0.05,
+    imm_boost::Real = 1.0,
     p_death::Real = 0.0,
+    recovery_dist::Symbol = :lognormal,
 )
     inf = InfectionData(name; init_prev=init_prev, beta=beta, label="SIS")
-    SIS(inf, Float64(dur_inf), Float64(p_death), StableRNG(0))
+    SIS(inf,
+        FloatState(:ti_recovered; default=Inf, label="Time recovered"),
+        FloatState(:immunity; default=0.0, label="Immunity"),
+        Float64(dur_inf), Float64(waning), Float64(imm_boost), Float64(p_death),
+        recovery_dist,
+        StableRNG(0))
 end
 
 disease_data(d::SIS) = d.infection.dd
@@ -541,7 +565,8 @@ function init_pre!(d::SIS, sim)
 
     # Register states
     for s in [d.infection.susceptible, d.infection.infected,
-              d.infection.ti_infected, d.infection.rel_sus, d.infection.rel_trans]
+              d.infection.ti_infected, d.infection.rel_sus, d.infection.rel_trans,
+              d.ti_recovered, d.immunity]
         add_module_state!(sim.people, s)
     end
 
@@ -563,6 +588,7 @@ function init_pre!(d::SIS, sim)
         Result(:n_susceptible; npts=npts, label="Susceptible", scale=false),
         Result(:n_infected; npts=npts, label="Infected", scale=false),
         Result(:prevalence; npts=npts, label="Prevalence", scale=false),
+        Result(:rel_sus; npts=npts, label="Relative susceptibility", scale=false),
     )
 
     md.initialized = true
@@ -592,30 +618,54 @@ function init_post!(d::SIS, sim)
     n_infect = min(n_infect, n)
 
     infect_uids = UIDs(active[randperm(d.rng, n)[1:n_infect]])
-    d.infection.susceptible[infect_uids] = false
-    d.infection.infected[infect_uids] = true
-    d.infection.ti_infected[infect_uids] = 1.0
+
+    # Set prognoses for initial infections (matching Python set_prognoses)
+    dur_mean = d.dur_inf / sim.pars.dt
+    for u in infect_uids.values
+        d.infection.susceptible.raw[u] = false
+        d.infection.infected.raw[u] = true
+        d.infection.ti_infected.raw[u] = 1.0
+        d.immunity.raw[u] += d.imm_boost
+        d.ti_recovered.raw[u] = 1.0 + _sample_dur(d.recovery_dist, dur_mean, d.rng)
+    end
     return d
 end
 
 function step_state!(d::SIS, sim)
     ti = module_data(d).t.ti
-    dur_ts = d.dur_inf / sim.pars.dt
+    ti_f = Float64(ti)
 
-    # Check recovery: infected for >= dur_inf timesteps
+    # Recovery: infected agents whose ti_recovered <= ti
     for u in sim.people.auids.values
-        if d.infection.infected.raw[u]
-            if (Float64(ti) - d.infection.ti_infected.raw[u]) >= dur_ts
+        @inbounds if d.infection.infected.raw[u]
+            if d.ti_recovered.raw[u] <= ti_f
                 if d.p_death > 0.0 && rand(d.rng) < d.p_death
                     request_death!(sim.people, UIDs([u]), ti)
                 else
                     d.infection.infected.raw[u] = false
-                    d.infection.susceptible.raw[u] = true  # Return to susceptible
+                    d.infection.susceptible.raw[u] = true
                 end
             end
         end
     end
+
+    # Update immunity (waning)
+    _update_immunity!(d, sim)
     return d
+end
+
+"""Exponential immunity waning, matching Python's SIS.update_immunity."""
+function _update_immunity!(d::SIS, sim)
+    waning_prob = 1.0 - exp(-d.waning * sim.pars.dt)  # Rate → probability conversion
+    imm_raw = d.immunity.raw
+    rel_sus_raw = d.infection.rel_sus.raw
+    @inbounds for u in sim.people.auids.values
+        if imm_raw[u] > 0.0
+            imm_raw[u] *= (1.0 - waning_prob)
+            rel_sus_raw[u] = max(0.0, 1.0 - imm_raw[u])
+        end
+    end
+    return
 end
 
 function step!(d::SIS, sim)
@@ -655,16 +705,19 @@ function infect!(d::SIS, sim)
         end
     end
 
-    # Deduplicate and apply
+    # Deduplicate and apply (set_prognoses equivalent)
     new_infections = 0
     seen = Set{Int}()
     ti_f = Float64(ti)
+    dur_mean = d.dur_inf / sim.pars.dt
     for t in all_targets
         if !(t in seen)
             push!(seen, t)
             d.infection.susceptible.raw[t] = false
             d.infection.infected.raw[t] = true
             d.infection.ti_infected.raw[t] = ti_f
+            d.immunity.raw[t] += d.imm_boost
+            d.ti_recovered.raw[t] = ti_f + _sample_dur(d.recovery_dist, dur_mean, d.rng)
             new_infections += 1
         end
     end
@@ -769,17 +822,20 @@ function update_results!(d::SIS, sim)
     active = sim.people.auids.values
     sus_raw = d.infection.susceptible.raw
     inf_raw = d.infection.infected.raw
+    rel_sus_raw = d.infection.rel_sus.raw
 
-    n_sus = 0; n_inf = 0
+    n_sus = 0; n_inf = 0; sum_rel_sus = 0.0
     @inbounds for u in active
         n_sus += sus_raw[u]
         n_inf += inf_raw[u]
+        sum_rel_sus += rel_sus_raw[u]
     end
 
+    n_total = Float64(length(active))
     md.results[:n_susceptible][ti] = Float64(n_sus)
     md.results[:n_infected][ti] = Float64(n_inf)
-    n_total = Float64(length(active))
     md.results[:prevalence][ti] = n_total > 0.0 ? n_inf / n_total : 0.0
+    md.results[:rel_sus][ti] = n_total > 0.0 ? sum_rel_sus / n_total : 0.0
     return d
 end
 

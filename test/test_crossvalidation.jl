@@ -40,10 +40,12 @@ const REF_PATH = joinpath(@__DIR__, "python_ref", "reference_data.json")
         jl_n_inf = get_result(sim, :sir, :n_infected)
         jl_n_rec = get_result(sim, :sir, :n_recovered)
 
-        # -- Conservation: S + I + R = N at every timestep --
+        # -- Conservation: S + I + R ≤ N at every timestep --
+        # (Dead agents reduce the active population, so S+I+R can be < N)
         for i in 1:min(length(jl_n_sus), length(jl_n_inf))
             total = jl_n_sus[i] + jl_n_inf[i] + jl_n_rec[i]
-            @test abs(total - 5000.0) < 2.0
+            @test total <= 5000.0 + 1.0  # Never more than N
+            @test total >= 5000.0 * 0.95  # At most 5% die (p_death=0.01)
         end
 
         # -- Qualitative: epidemic occurs (peak > initial prevalence) --
