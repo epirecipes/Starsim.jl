@@ -24,19 +24,23 @@ function _lognorm_ex_sample(rng, mean_val::Float64, std_val::Float64)
     return exp(mu + sqrt(sigma2) * randn(rng))
 end
 
-"""Convert sim step index to monthly disease step index (matching Python's disease ti)."""
+"""Convert sim step index to monthly disease step index (matching Python's disease ti).
+Uses round() to avoid floating-point precision issues with floor() — e.g.,
+`floor(7 * (1/12) * 12)` = `floor(6.999...)` = 6 instead of 7."""
 function _sim_ti_to_monthly(sim_ti::Int, sim_dt::Float64)
-    return floor(Int, Float64(sim_ti) * sim_dt * 12.0)
+    return round(Int, Float64(sim_ti) * sim_dt * 12.0)
 end
 
-"""Check if the current sim step is a monthly boundary for the HIV disease."""
+"""Check if the current sim step is a monthly boundary for the HIV disease.
+Uses round() to avoid floating-point precision issues where floor() would
+skip steps (e.g., ti=7,14,25,28,31,50 were skipped with dt=1/12)."""
 function _hiv_should_step(sim)
     sim_dt = sim.pars.dt
     ti = sim.loop.ti
     ti <= 1 && return true
-    current_time = Float64(ti) * sim_dt
-    prev_time = Float64(ti - 1) * sim_dt
-    return floor(Int, current_time / _HIV_DISEASE_DT) != floor(Int, prev_time / _HIV_DISEASE_DT)
+    current_month = round(Int, Float64(ti) * sim_dt / _HIV_DISEASE_DT)
+    prev_month = round(Int, Float64(ti - 1) * sim_dt / _HIV_DISEASE_DT)
+    return current_month != prev_month
 end
 
 # ============================================================================
@@ -671,8 +675,9 @@ function Starsim.update_results!(d::HIV, sim)
     md.results[:n_diagnosed][ti]   = Float64(n_diag)
 
     n_total = Float64(length(active))
-    # HIV overrides BaseSTI prevalence back to total population:
-    # "Recalculate prevalence so it's for the whole population"
+    # HIV overrides BaseSTI prevalence to use total (alive) population:
+    # Python: sum(self.infected) / len(self.infected)
+    # where len(self.infected) = len(people) = alive agents only (dead agents removed from array)
     md.results[:prevalence][ti] = n_total > 0.0 ? Float64(n_inf) / n_total : 0.0
     md.results[:mean_cd4][ti]   = n_cd4 > 0 ? cd4_sum / n_cd4 : 0.0
     return d
