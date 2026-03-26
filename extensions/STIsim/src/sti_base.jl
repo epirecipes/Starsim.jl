@@ -113,6 +113,10 @@ mutable struct SEIS <: Starsim.AbstractInfection
     age_hi::Float64
 
     rng::StableRNG
+
+    # CRN transmission RNGs (matching Python's multi_random('source', 'target'))
+    trans_rng_src::StableRNG
+    trans_rng_trg::StableRNG
 end
 
 # Alias for clarity
@@ -184,6 +188,8 @@ function SEIS(;
         Float64(age_lo),
         Float64(age_hi),
         StableRNG(0),
+        StableRNG(0),
+        StableRNG(0),
     )
 end
 
@@ -198,6 +204,11 @@ function Starsim.init_pre!(d::SEIS, sim)
     md = Starsim.module_data(d)
     md.t = Starsim.Timeline(start=sim.pars.start, stop=sim.pars.stop, dt=sim.pars.dt)
     d.rng = StableRNG(hash(md.name) ⊻ UInt64(sim.pars.rand_seed))
+
+    # CRN transmission RNGs — separate deterministic seeds for source and target
+    # dimensions, matching Python's multi_random('source', 'target')
+    d.trans_rng_src = StableRNG(hash(Symbol(md.name, :_trans_source)) ⊻ UInt64(sim.pars.rand_seed))
+    d.trans_rng_trg = StableRNG(hash(Symbol(md.name, :_trans_target)) ⊻ UInt64(sim.pars.rand_seed))
 
     # Register states
     states = [
@@ -261,6 +272,10 @@ function Starsim.init_post!(d::SEIS, sim)
     end
 
     infect_uids = Starsim.UIDs(active[randperm(d.rng, n)[1:n_infect]])
+    # Use ti=1 to match Julia's 1-indexed loop. Python uses ti=0 with a 0-indexed loop,
+    # so Python's step 0 (first iteration) ↔ Julia's step 1 (first iteration).
+    # For diseases with dur_exp>0 (e.g., chlamydia): E→I occurs at the SECOND iteration
+    # in both systems. For dur_exp=0 (e.g., gonorrhea): E→I at the FIRST iteration in both.
     ti = 1
     for u in infect_uids.values
         _do_seis_infection!(d, sim, u, 0, ti)
@@ -292,11 +307,12 @@ function Starsim.step_state!(d::SEIS, sim)
     ti_pid_raw      = d.ti_pid.raw
     female_raw      = sim.people.female.raw
 
-    # Exposed → Infected transition
+    # Exposed → Infected transition (matching Python: overwrite ti_infected)
     @inbounds for u in active
         if exposed_raw[u] && ti_inf_raw[u] <= ti_f
             exposed_raw[u] = false
             infected_raw[u] = true
+            ti_inf_raw[u] = ti_f  # Python overwrites ti_infected on E→I transition
         end
     end
 
@@ -354,9 +370,15 @@ function _infect_sti!(d::SEIS, sim)
     return new_infections
 end
 
-"""Per-act STI transmission across edges with direction-specific betas."""
+"""Per-act STI transmission across edges with direction-specific betas.
+
+Matches Python's two-pass algorithm: process ALL edges in direction 0 (p1→p2),
+then ALL edges in direction 1 (p2→p1). Uses per-agent CRN random draws
+matching Python's multi_random('source', 'target'): each agent gets ONE
+random value per pass per dimension, shared across all its edges. Combined
+via XOR hash: `xor(a*b, a-b)` on uint64 bit-reinterpretations.
+"""
 function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64, ti::Int, net, net_name::Symbol)
-    new_infections = 0
     n_edges = length(edges)
     bidir = Starsim.network_data(net).bidirectional
 
@@ -365,68 +387,87 @@ function _infect_sti_edges!(d::SEIS, sim, edges::Starsim.Edges, beta_dt::Float64
     eb = edges.beta
     ea = edges.acts
 
-    # SNAPSHOT state arrays before edge loop (matching Python's synchronous update:
-    # rel_trans/rel_sus are computed once; new infections don't affect this step)
+    # Snapshot state arrays ONCE before both passes (matching Python)
     n_agents = length(d.infection.infected.raw)
-    infected_snap    = copy(d.infection.infected.raw)
-    exposed_snap     = copy(d.exposed.raw)
-    susceptible_snap = copy(d.infection.susceptible.raw)
-    rel_trans_snap   = copy(d.infection.rel_trans.raw)
-    rel_sus_snap     = copy(d.infection.rel_sus.raw)
+    rel_trans_snap = copy(d.infection.rel_trans.raw)
+    rel_sus_snap   = copy(d.infection.rel_sus.raw)
 
-    # Mask: non-infectious get rel_trans=0, non-susceptible get rel_sus=0
+    # Mask: infected * rel_trans, susceptible * rel_sus (matching Python's pre-computation)
+    infected_raw = d.infection.infected.raw
+    susceptible_raw = d.infection.susceptible.raw
     @inbounds for u in 1:n_agents
-        if !infected_snap[u]
+        if !infected_raw[u]
             rel_trans_snap[u] = 0.0
         end
-        if !susceptible_snap[u]
+        if !susceptible_raw[u]
             rel_sus_snap[u] = 0.0
         end
     end
 
-    female_raw      = sim.people.female.raw
-    rng = d.rng
+    female_raw = sim.people.female.raw
 
     beta_m2f = d.beta_m2f
     beta_f2m = d.beta_m2f * d.rel_beta_f2m
     beta_m2m = d.beta_m2m
-    eff_condom = d.eff_condom
-    dt = sim.pars.dt
+
+    new_targets = Int[]
+    new_sources = Int[]
+
+    # --- Pass 1: p1 → p2 ---
+    # Per-agent random draws (matching Python's slot-indexed multi_random)
+    src_draws_1 = rand(d.trans_rng_src, n_agents)
+    trg_draws_1 = rand(d.trans_rng_trg, n_agents)
 
     @inbounds for i in 1:n_edges
-        src = p1[i]
-        trg = p2[i]
-        edge_beta = eb[i]
-        acts = ea[i]
-
-        # src → trg
-        if (infected_snap[src] || exposed_snap[src]) && susceptible_snap[trg] && !exposed_snap[trg]
-            if infected_snap[src]  # Only infectious (not exposed) can transmit
-                beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
-                net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-                p = clamp(rel_trans_snap[src] * rel_sus_snap[trg] * net_beta_val, 0.0, 1.0)
-                if rand(rng) < p
-                    _do_seis_infection!(d, sim, trg, src, ti)
-                    susceptible_snap[trg] = false  # Prevent re-infection (matches Python dedup)
-                    new_infections += 1
-                end
-            end
+        src = p1[i]; trg = p2[i]
+        edge_beta = eb[i]; acts = ea[i]
+        beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
+        net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+        p = clamp(rel_trans_snap[src] * rel_sus_snap[trg] * net_beta_val, 0.0, 1.0)
+        # CRN combine: reinterpret as UInt64, then xor(a*b, a-b)
+        a = reinterpret(UInt64, src_draws_1[src])
+        b = reinterpret(UInt64, trg_draws_1[trg])
+        randval = Float64(xor(a * b, a - b)) / Float64(typemax(UInt64))
+        if p > randval
+            push!(new_targets, trg)
+            push!(new_sources, src)
         end
+    end
 
-        # trg → src (bidirectional)
-        if bidir && (infected_snap[trg] || exposed_snap[trg]) && susceptible_snap[src] && !exposed_snap[src]
-            if infected_snap[trg]
-                beta_act = _get_directional_beta(female_raw[trg], female_raw[src], beta_m2f, beta_f2m, beta_m2m)
-                net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
-                p = clamp(rel_trans_snap[trg] * rel_sus_snap[src] * net_beta_val, 0.0, 1.0)
-                if rand(rng) < p
-                    _do_seis_infection!(d, sim, src, trg, ti)
-                    susceptible_snap[src] = false  # Prevent re-infection (matches Python dedup)
-                    new_infections += 1
-                end
+    # --- Pass 2: p2 → p1 ---
+    if bidir
+        # Fresh per-agent draws for pass 2 (Python calls rvs() again, advancing RNG)
+        src_draws_2 = rand(d.trans_rng_src, n_agents)
+        trg_draws_2 = rand(d.trans_rng_trg, n_agents)
+
+        @inbounds for i in 1:n_edges
+            src = p2[i]; trg = p1[i]
+            edge_beta = eb[i]; acts = ea[i]
+            beta_act = _get_directional_beta(female_raw[src], female_raw[trg], beta_m2f, beta_f2m, beta_m2m)
+            net_beta_val = (1.0 - (1.0 - beta_act)^acts) * edge_beta
+            p = clamp(rel_trans_snap[src] * rel_sus_snap[trg] * net_beta_val, 0.0, 1.0)
+            a = reinterpret(UInt64, src_draws_2[src])
+            b = reinterpret(UInt64, trg_draws_2[trg])
+            randval = Float64(xor(a * b, a - b)) / Float64(typemax(UInt64))
+            if p > randval
+                push!(new_targets, trg)
+                push!(new_sources, src)
             end
         end
     end
+
+    # Deduplicate (matching Python's unique()) — keep first occurrence
+    seen = Set{Int}()
+    new_infections = 0
+    for j in 1:length(new_targets)
+        trg = new_targets[j]
+        if !(trg in seen)
+            push!(seen, trg)
+            _do_seis_infection!(d, sim, trg, new_sources[j], ti)
+            new_infections += 1
+        end
+    end
+
     return new_infections
 end
 
@@ -459,12 +500,9 @@ function _do_seis_infection!(d::SEIS, sim, target::Int, source::Int, ti::Int)
     d.ti_pid.raw[target] = Inf
 
     # Time to become infectious (exposed → infected)
-    if d.dur_exp > 0.0
-        dur_exp_ts = d.dur_exp / dt
-        ti_inf = Float64(ti) + max(1.0, dur_exp_ts + randn(rng) * dur_exp_ts * 0.3)
-    else
-        ti_inf = Float64(ti)  # Immediate infectiousness (e.g. gonorrhea)
-    end
+    # Match Python exactly: ti_infected = sim.ti + dur_exp (constant, no noise, no clamping)
+    dur_exp_ts = d.dur_exp / dt
+    ti_inf = Float64(ti) + dur_exp_ts
     d.infection.ti_infected.raw[target] = ti_inf
 
     # Symptomatic?
@@ -472,50 +510,46 @@ function _do_seis_infection!(d::SEIS, sim, target::Int, source::Int, ti::Int)
     is_symp = rand(rng) < p_symp
 
     if is_symp
-        # Presymptomatic period (sex-specific lognormal if available)
+        # Presymptomatic period (sex-specific lognormal, matching Python exactly)
         presymp_mean = female ? d.dur_presymp_f : d.dur_presymp_m
         presymp_std  = female ? d.dur_presymp_f_std : d.dur_presymp_m_std
         if presymp_mean >= 0.0
             presymp_dur_years = _seis_lognorm_ex_sample(rng, presymp_mean, presymp_std)
-            presymp_ts = max(0.0, presymp_dur_years / dt)
+            presymp_ts = presymp_dur_years / dt
         else
-            # Fallback: use dur_exp-based heuristic
-            dur_exp_ts = d.dur_exp / dt
-            presymp_ts = max(1.0, dur_exp_ts * 0.5 + randn(rng) * dur_exp_ts * 0.2)
+            presymp_ts = d.dur_exp / dt * 0.5
         end
         d.ti_symptomatic.raw[target] = ti_inf + presymp_ts
 
-        # Symptomatic clearance (sex-specific lognormal if available)
+        # Symptomatic clearance (sex-specific lognormal, no clamping — matching Python)
         clear_mean = female ? d.dur_symp2clear_f : d.dur_symp2clear_m
         clear_std  = female ? d.dur_symp2clear_f_std : d.dur_symp2clear_m_std
         if clear_mean >= 0.0
             clear_dur_years = _seis_lognorm_ex_sample(rng, clear_mean, clear_std)
-            clear_ts = max(1.0, clear_dur_years / dt)
+            clear_ts = clear_dur_years / dt
             d.ti_clearance.raw[target] = d.ti_symptomatic.raw[target] + clear_ts
         else
-            # Fallback: use dur_inf
-            dur_ts = max(1.0, d.dur_inf / dt + randn(rng) * (d.dur_inf_std / dt))
+            dur_ts = d.dur_inf / dt
             d.ti_clearance.raw[target] = ti_inf + dur_ts
         end
     else
-        # Asymptomatic clearance (sex-specific lognormal if available)
+        # Asymptomatic clearance (sex-specific lognormal, no clamping — matching Python)
         clear_mean = female ? d.dur_asymp2clear_f : d.dur_asymp2clear_m
         clear_std  = female ? d.dur_asymp2clear_f_std : d.dur_asymp2clear_m_std
         if clear_mean >= 0.0
             clear_dur_years = _seis_lognorm_ex_sample(rng, clear_mean, clear_std)
-            clear_ts = max(1.0, clear_dur_years / dt)
+            clear_ts = clear_dur_years / dt
             d.ti_clearance.raw[target] = ti_inf + clear_ts
         else
-            # Fallback: use dur_inf
-            dur_ts = max(1.0, d.dur_inf / dt + randn(rng) * (d.dur_inf_std / dt))
+            dur_ts = d.dur_inf / dt
             d.ti_clearance.raw[target] = ti_inf + dur_ts
         end
     end
 
-    # PID for females
+    # PID for females (matching Python: ti_pid = ti_infected + dur_prepid)
     if female && rand(rng) < d.p_pid
-        pid_delay = max(1.0, 6.0 / (dt * 52) + randn(rng) * 2.0 / (dt * 52))
-        d.ti_pid.raw[target] = ti_inf + pid_delay
+        pid_delay_years = _seis_lognorm_ex_sample(rng, 6.0/52.0, 2.0/52.0)
+        d.ti_pid.raw[target] = ti_inf + pid_delay_years / dt
     end
 
     d.n_infections.raw[target] += 1.0
