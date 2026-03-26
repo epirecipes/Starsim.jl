@@ -83,6 +83,9 @@ mutable struct StructuredSexual <: Starsim.AbstractNetwork
     client_share::Float64      # P(male is client) (default 0.12)
     sw_seeking_rate::Float64   # Monthly rate clients seek FSW (default 1.0)
 
+    # Per-agent sex work intensity (redrawn each step, matching Python ss.random())
+    sw_intensity::Starsim.StateVector{Float64, Vector{Float64}}
+
     # Edge-level metadata (parallel to edges)
     edge_dur::Vector{Float64}        # Remaining duration in timesteps
     edge_type::Vector{Int}           # 0=stable, 1=casual, 2=onetime, 3=sw
@@ -166,6 +169,7 @@ function StructuredSexual(;
         stable_dur_pars, casual_dur_pars,
         Float64(acts_mean), Float64(acts_std),
         Float64(fsw_share), Float64(client_share), Float64(sw_seeking_rate),
+        Starsim.FloatState(:sw_intensity; default=0.0, label="SW work intensity"),
         Float64[], Int[], Bool[],
         StableRNG(0),
     )
@@ -211,7 +215,8 @@ function Starsim.init_pre!(net::StructuredSexual, sim)
     # Register all per-agent states
     for st in [getfield(net, :risk_group), getfield(net, :concurrency_state),
                getfield(net, :partners_state), getfield(net, :debut_state),
-               getfield(net, :fsw_state), getfield(net, :client_state)]
+               getfield(net, :fsw_state), getfield(net, :client_state),
+               getfield(net, :sw_intensity)]
         Starsim.add_module_state!(sim.people, st)
     end
 
@@ -324,8 +329,8 @@ end
 function _set_network_states!(net::StructuredSexual, sim; upper_age::Float64=1000.0)
     _set_risk_groups!(net, sim.people; upper_age)
     _set_concurrency!(net, sim.people; upper_age)
+    _set_sex_work!(net, sim.people; upper_age)   # Match Python order: sex_work before debut
     _set_debut!(net, sim.people; upper_age)
-    _set_sex_work!(net, sim.people; upper_age)
     return net
 end
 
@@ -374,7 +379,10 @@ function _match_pairs(net::StructuredSexual, sim)
     p_pair_form = getfield(net, :p_pair_form)
     age_diff_pars = getfield(net, :age_diff_pars)
 
-    # Find eligible: over debut and under concurrency limit
+    # Find eligible: over debut, under concurrency limit
+    # NOTE: do NOT check ti_dead here — Python's match_pairs runs at step 7
+    # before step_die (step 10), so dying agents still have alive=True and
+    # participate in partnership formation.
     m_eligible = Int[]
     f_eligible = Int[]
     for u in people.auids.values
@@ -484,14 +492,19 @@ function _match_sex_workers(net::StructuredSexual, sim)
     fsw_raw = getfield(net, :fsw_state).raw
     client_raw = getfield(net, :client_state).raw
     sw_rate = getfield(net, :sw_seeking_rate)
+    intensity_raw = getfield(net, :sw_intensity).raw
 
     # Active FSW and clients (over debut)
+    # NOTE: do NOT check ti_dead — Python's match runs before step_die,
+    # so dying agents still have alive=True and participate.
     active_fsw = Int[]
     active_clients = Int[]
     for u in people.auids.values
         age_raw[u] <= debut_raw[u] && continue
         if fsw_raw[u] > 0.5
             push!(active_fsw, u)
+            # Draw fresh sw_intensity each step (matching Python: ss.random())
+            intensity_raw[u] = rand(rng)
         end
         if client_raw[u] > 0.5
             push!(active_clients, u)
@@ -510,27 +523,56 @@ function _match_sex_workers(net::StructuredSexual, sim)
 
     isempty(m_looking) && return (Int[], Int[])
 
-    # Match: if more clients than FSW, repeat FSW; otherwise subsample
-    n_pairs = min(length(m_looking), length(active_fsw) * 10)
-    if n_pairs > length(active_fsw)
-        # Repeat FSW to match demand
-        p2 = Int[]
-        while length(p2) < n_pairs
-            append!(p2, active_fsw)
+    # Intensity-weighted matching (matching Python's match_sex_workers exactly)
+    if length(m_looking) > length(active_fsw)
+        # Repeat FSWs proportional to intensity: n_repeats = floor(intensity*10) + 1
+        fsw_repeats = Int[]
+        for u in active_fsw
+            n_rep = floor(Int, intensity_raw[u] * 10.0) + 1
+            for _ in 1:n_rep
+                push!(fsw_repeats, u)
+            end
         end
-        p2 = p2[1:n_pairs]
-        # Shuffle
-        for i in length(p2):-1:2
-            j = rand(rng, 1:i)
-            p2[i], p2[j] = p2[j], p2[i]
+        # If still not enough, repeat entire array 10x (matching Python)
+        if length(fsw_repeats) < length(m_looking)
+            base = copy(fsw_repeats)
+            for _ in 1:9
+                append!(fsw_repeats, base)
+            end
+        end
+
+        n_pairs = min(length(fsw_repeats), length(m_looking))
+        if length(fsw_repeats) < length(m_looking)
+            # Still not enough FSW — take what we can
+            p1 = m_looking[1:n_pairs]
+            p2 = fsw_repeats
+        else
+            # Weight by intensity / count_repeats, choose top n_pairs
+            # Count occurrences of each unique FSW in fsw_repeats
+            uid_counts = Dict{Int,Int}()
+            for u in fsw_repeats
+                uid_counts[u] = get(uid_counts, u, 0) + 1
+            end
+            # Compute weight for each position: intensity / count
+            weights = Vector{Float64}(undef, length(fsw_repeats))
+            for i in 1:length(fsw_repeats)
+                u = fsw_repeats[i]
+                weights[i] = intensity_raw[u] / uid_counts[u]
+            end
+            # Sort by weight descending, take top n_pairs
+            order = sortperm(weights; rev=true)
+            p2 = fsw_repeats[order[1:n_pairs]]
+            p1 = m_looking
         end
     else
-        # Subsample FSW
-        perm = randperm(rng, length(active_fsw))
-        p2 = active_fsw[perm[1:n_pairs]]
+        # Fewer clients than FSW — select by intensity
+        n_pairs = length(m_looking)
+        weights = Float64[intensity_raw[u] for u in active_fsw]
+        order = sortperm(weights; rev=true)
+        p2 = active_fsw[order[1:n_pairs]]
+        p1 = m_looking
     end
 
-    p1 = length(m_looking) <= n_pairs ? m_looking : m_looking[1:n_pairs]
     n = min(length(p1), length(p2))
     return (p1[1:n], p2[1:n])
 end
@@ -708,20 +750,37 @@ function _end_pairs!(net::StructuredSexual, sim)
     end
 
     # Find active edges (dur > 0 and both agents alive)
+    # NOTE: At step 7, Python checks people.alive which is still True for
+    # dying agents (step_die hasn't run yet). So we only check alive_raw here.
+    # Dead agents' edges get cleaned up in finish_step! via _remove_dead_edges!
+    # WITHOUT decrementing partner counts, matching Python's remove_uids.
     alive_raw = sim.people.alive.raw
     keep = Int[]
+    # Collect dissolved non-SW edges' agent UIDs for partner count update.
+    # NOTE: Python uses numpy fancy indexing (self.partners[p1_edges] -= 1)
+    # which does NOT accumulate for duplicate indices — if the same agent
+    # appears in multiple dissolving edges, their count is only decremented
+    # once. We match this by collecting unique UIDs before decrementing.
+    dissolved_p1 = Set{Int}()
+    dissolved_p2 = Set{Int}()
     for i in 1:length(edge_dur)
-        p1_alive = alive_raw[edges.p1[i]]
-        p2_alive = alive_raw[edges.p2[i]]
-        if edge_dur[i] > 0.0 && p1_alive && p2_alive
+        p1_ok = alive_raw[edges.p1[i]]
+        p2_ok = alive_raw[edges.p2[i]]
+        if edge_dur[i] > 0.0 && p1_ok && p2_ok
             push!(keep, i)
         else
-            # Decrement partner counts for non-SW dissolved edges
             if !edge_sw[i]
-                partners_raw[edges.p1[i]] = max(0.0, partners_raw[edges.p1[i]] - 1.0)
-                partners_raw[edges.p2[i]] = max(0.0, partners_raw[edges.p2[i]] - 1.0)
+                push!(dissolved_p1, edges.p1[i])
+                push!(dissolved_p2, edges.p2[i])
             end
         end
+    end
+    # Decrement partner counts once per unique agent (matching numpy behavior)
+    for uid in dissolved_p1
+        partners_raw[uid] = max(0.0, partners_raw[uid] - 1.0)
+    end
+    for uid in dissolved_p2
+        partners_raw[uid] = max(0.0, partners_raw[uid] - 1.0)
     end
 
     if length(keep) < length(edge_dur)
@@ -753,5 +812,52 @@ function Starsim.step!(net::StructuredSexual, sim)
     # 3. Form new partnerships
     _add_pairs!(net, sim)
 
+    return net
+end
+
+# ============================================================================
+# finish_step! — remove dead agents' edges without decrementing partner counts
+# This matches Python's remove_uids() called from people.finish_step/remove_dead.
+# Python removes edges for dead agents but does NOT decrement partner counts,
+# creating a "leak" where surviving partners retain inflated counts.
+# ============================================================================
+
+"""
+Remove edges involving dead agents WITHOUT decrementing partner counts.
+Matches Python's `remove_uids()` which is called from `people.remove_dead()`.
+"""
+function _remove_dead_edges!(net::StructuredSexual, sim)
+    edge_dur = getfield(net, :edge_dur)
+    isempty(edge_dur) && return net
+
+    edges = getfield(net, :data).edges
+    edge_type = getfield(net, :edge_type)
+    edge_sw = getfield(net, :edge_sw)
+    alive_raw = sim.people.alive.raw
+
+    # Find edges where both agents are still alive
+    keep = Int[]
+    for i in 1:length(edge_dur)
+        if alive_raw[edges.p1[i]] && alive_raw[edges.p2[i]]
+            push!(keep, i)
+        end
+        # NOTE: deliberately NOT decrementing partner counts — matching Python
+    end
+
+    if length(keep) < length(edge_dur)
+        edges.p1 = edges.p1[keep]
+        edges.p2 = edges.p2[keep]
+        edges.beta = edges.beta[keep]
+        edges.acts = edges.acts[keep]
+        setfield!(net, :edge_dur, edge_dur[keep])
+        setfield!(net, :edge_type, edge_type[keep])
+        setfield!(net, :edge_sw, edge_sw[keep])
+    end
+
+    return net
+end
+
+function Starsim.finish_step!(net::StructuredSexual, sim)
+    _remove_dead_edges!(net, sim)
     return net
 end
