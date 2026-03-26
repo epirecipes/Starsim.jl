@@ -264,14 +264,20 @@ function Starsim.init_post!(d::SEIS, sim)
     people = sim.people
     active = people.auids.values
     n = length(active)
-    n_infect = max(1, Int(round(d.infection.dd.init_prev * n)))
-    n_infect = min(n_infect, n)
 
     if d.infection.dd.init_prev <= 0.0
         return d
     end
 
-    infect_uids = Starsim.UIDs(active[randperm(d.rng, n)[1:n_infect]])
+    # Match Python's ss.bernoulli(p=init_prev).filter():
+    # Bernoulli per agent, random count (not deterministic round(p*N))
+    prev = d.infection.dd.init_prev
+    infected_mask = [rand(d.rng) < prev for _ in 1:n]
+    infect_indices = findall(infected_mask)
+    if isempty(infect_indices)
+        return d
+    end
+    infect_uids = Starsim.UIDs(active[infect_indices])
     # Use ti=1 to match Julia's 1-indexed loop. Python uses ti=0 with a 0-indexed loop,
     # so Python's step 0 (first iteration) ↔ Julia's step 1 (first iteration).
     # For diseases with dur_exp>0 (e.g., chlamydia): E→I occurs at the SECOND iteration
