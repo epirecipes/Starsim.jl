@@ -605,9 +605,11 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
     p_mismatched_casual = getfield(net, :p_mismatched_casual)
     stable_dur_pars = getfield(net, :stable_dur_pars)
     casual_dur_pars = getfield(net, :casual_dur_pars)
-    # Convert annual acts to per-timestep (Python freqperyear auto-converts)
-    acts_mean_dt = getfield(net, :acts_mean) * dt
-    acts_std_dt = getfield(net, :acts_std) * dt
+    # Store ANNUAL acts on edges (Python stores annual acts, net_beta uses them directly)
+    # Python: lognorm_ex(freqperyear(80), freqperyear(30)) — freqperyear std gets scaled by dt
+    # during convert_timepars, producing lognorm_ex(mean=80, std=30*dt)
+    acts_mean = getfield(net, :acts_mean)         # annual mean (80)
+    acts_std_dt = getfield(net, :acts_std) * dt   # std scaled by dt (30*dt ≈ 2.5)
 
     n = length(p1)
     new_p1 = Vector{Int}(undef, n)
@@ -624,8 +626,8 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
         new_p1[i] = m
         new_p2[i] = f
 
-        # Acts per timestep — Python uses .astype(int) truncation (can be 0)
-        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
+        # Annual acts — Python uses lognorm_ex(freqperyear(80), freqperyear(30)).astype(int)
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean, acts_std_dt))
 
         # Determine partnership type based on risk group matching
         rg_m = rg_raw[m]
@@ -701,8 +703,8 @@ function _add_pairs_sw!(net::StructuredSexual, sim)
     rng = getfield(net, :rng)
     dt = sim.pars.dt
     n = length(p1)
-    # Convert annual acts to per-timestep
-    acts_mean_dt = getfield(net, :acts_mean) * dt
+    # Store ANNUAL acts on edges (matching Python)
+    acts_mean = getfield(net, :acts_mean)
     acts_std_dt = getfield(net, :acts_std) * dt
 
     new_beta = ones(Float64, n)
@@ -712,7 +714,7 @@ function _add_pairs_sw!(net::StructuredSexual, sim)
     new_sw = fill(true, n)
 
     for i in 1:n
-        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean, acts_std_dt))
     end
 
     Starsim.add_edges!(getfield(net, :data).edges, p1, p2, new_beta, new_acts)
