@@ -275,30 +275,12 @@ function Starsim.init_post!(d::HIV, sim)
         _do_hiv_infection!(d, sim, u, 0, ti_init)
     end
 
-    # Advance initial cases to correct disease stage based on past infection time
-    # ti values are now in monthly disease steps; compare against monthly step 0
-    for u in infect_uids.values
-        # Acute → Latent (if past ti_latent)
-        if d.acute.raw[u] && d.ti_latent.raw[u] <= 0.0
-            d.acute.raw[u] = false
-            d.latent.raw[u] = true
-            d.infection.rel_trans.raw[u] = 1.0
-            d.cd4.raw[u] = d.cd4_latent.raw[u]
-        end
-        # Latent → Falling (if past ti_falling)
-        if d.latent.raw[u] && d.ti_falling.raw[u] <= 0.0
-            d.latent.raw[u] = false
-            d.falling.raw[u] = true
-            d.infection.rel_trans.raw[u] = d.rel_trans_falling
-        end
-        # Falling → Dead (if past ti_zero)
-        if d.falling.raw[u] && d.ti_zero.raw[u] <= 0.0
-            d.infection.infected.raw[u] = false
-            d.falling.raw[u] = false
-            sim.people.alive.raw[u] = false
-            sim.people.ti_dead.raw[u] = 1.0
-        end
-    end
+    # Do NOT advance initial cases through disease stages here.
+    # Python's set_prognoses() leaves all initial infections in ACUTE phase,
+    # and step_state() handles one-phase-per-step transitions starting at step 0.
+    # Matching that: all initial infections stay in acute with scheduled ti_latent,
+    # ti_falling, ti_zero (all in monthly disease timesteps, possibly in the past).
+    # step_state! will transition them one phase per call.
 
     return d
 end
@@ -326,7 +308,10 @@ function Starsim.step_state!(d::HIV, sim)
     on_art_raw  = d.on_art.raw
 
     # --- Phase 1: State transitions (matching Python order) ---
-    # All ti_* values are in monthly disease steps
+    # Python computes transition masks BEFORE applying them, so an agent can only
+    # transition ONE phase per step_state call (acute→latent OR latent→falling, not both).
+    # Using elseif ensures the same behavior: an agent transitioning from acute to
+    # latent in this call will NOT also transition to falling until the next call.
     @inbounds for u in active
         infected_raw[u] || continue
 
@@ -334,10 +319,8 @@ function Starsim.step_state!(d::HIV, sim)
         if acute_raw[u] && d.ti_latent.raw[u] <= monthly_ti
             acute_raw[u] = false
             latent_raw[u] = true
-        end
-
-        # Latent → Falling
-        if latent_raw[u] && !on_art_raw[u] && d.ti_falling.raw[u] <= monthly_ti
+        # Latent → Falling (elseif prevents same-step cascade)
+        elseif latent_raw[u] && !on_art_raw[u] && d.ti_falling.raw[u] <= monthly_ti
             latent_raw[u] = false
             falling_raw[u] = true
         end

@@ -605,11 +605,12 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
     p_mismatched_casual = getfield(net, :p_mismatched_casual)
     stable_dur_pars = getfield(net, :stable_dur_pars)
     casual_dur_pars = getfield(net, :casual_dur_pars)
-    # Store ANNUAL acts on edges (Python stores annual acts, net_beta uses them directly)
-    # Python: lognorm_ex(freqperyear(80), freqperyear(30)) — freqperyear std gets scaled by dt
-    # during convert_timepars, producing lognorm_ex(mean=80, std=30*dt)
-    acts_mean = getfield(net, :acts_mean)         # annual mean (80)
-    acts_std_dt = getfield(net, :acts_std) * dt   # std scaled by dt (30*dt ≈ 2.5)
+    # Store PER-TIMESTEP acts on edges (matching Python after convert_timepars)
+    # Python: lognorm_ex(freqperyear(80), freqperyear(30)) — both mean and std get
+    # scaled by dt during convert_timepars via freqperyear.to(dt) = value * dt
+    # This gives lognorm_ex(mean=80*dt, std=30*dt) = lognorm_ex(6.67, 2.5) for dt=1/12
+    acts_mean_dt = getfield(net, :acts_mean) * dt   # per-timestep mean (80*dt ≈ 6.67)
+    acts_std_dt  = getfield(net, :acts_std) * dt    # per-timestep std (30*dt ≈ 2.5)
 
     n = length(p1)
     new_p1 = Vector{Int}(undef, n)
@@ -626,8 +627,9 @@ function _add_pairs_nonsw!(net::StructuredSexual, sim; initial::Bool=false)
         new_p1[i] = m
         new_p2[i] = f
 
-        # Annual acts — Python uses lognorm_ex(freqperyear(80), freqperyear(30)).astype(int)
-        new_acts[i] = floor(_lognorm_sample(rng, acts_mean, acts_std_dt))
+        # Per-timestep acts — Python uses round(lognorm_ex(freqperyear(80), freqperyear(30)))
+        # after convert_timepars, both params are multiplied by dt
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
 
         # Determine partnership type based on risk group matching
         rg_m = rg_raw[m]
@@ -703,9 +705,9 @@ function _add_pairs_sw!(net::StructuredSexual, sim)
     rng = getfield(net, :rng)
     dt = sim.pars.dt
     n = length(p1)
-    # Store ANNUAL acts on edges (matching Python)
-    acts_mean = getfield(net, :acts_mean)
-    acts_std_dt = getfield(net, :acts_std) * dt
+    # Store PER-TIMESTEP acts on edges (matching Python after convert_timepars)
+    acts_mean_dt = getfield(net, :acts_mean) * dt
+    acts_std_dt  = getfield(net, :acts_std) * dt
 
     new_beta = ones(Float64, n)
     new_acts = Vector{Float64}(undef, n)
@@ -714,7 +716,7 @@ function _add_pairs_sw!(net::StructuredSexual, sim)
     new_sw = fill(true, n)
 
     for i in 1:n
-        new_acts[i] = floor(_lognorm_sample(rng, acts_mean, acts_std_dt))
+        new_acts[i] = floor(_lognorm_sample(rng, acts_mean_dt, acts_std_dt))
     end
 
     Starsim.add_edges!(getfield(net, :data).edges, p1, p2, new_beta, new_acts)
