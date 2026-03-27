@@ -182,8 +182,8 @@ Returns `sim` for chaining.
 function init!(sim::Sim)
     sim.initialized && return sim
 
-    # 1. Initialize people
-    init_people!(sim.people; use_aging=sim.pars.use_aging)
+    # 1. Initialize people (pass rand_seed for per-seed population variation)
+    init_people!(sim.people; use_aging=sim.pars.use_aging, rand_seed=sim.pars.rand_seed)
 
     # 2. init_pre! all modules (link to sim, register states)
     for (_, mod) in all_modules(sim)

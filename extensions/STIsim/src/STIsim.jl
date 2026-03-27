@@ -40,6 +40,9 @@ include("analyzers.jl")
 # Convenience simulation constructor
 include("sim.jl")
 
+# Alias so STIsim.Sim(...) calls STISim (not Starsim.Sim)
+const Sim = STISim
+
 export # Base
        BaseSTI, SEIS,
        # Diseases
@@ -54,6 +57,6 @@ export # Base
        # Analyzers
        CoinfectionAnalyzer,
        # Sim
-       STISim
+       STISim, Sim
 
 end # module STIsim

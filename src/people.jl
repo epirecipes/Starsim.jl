@@ -93,11 +93,13 @@ end
 Base.length(p::People) = length(p.auids)
 
 """
-    init_people!(people::People; use_aging::Bool=true)
+    init_people!(people::People; use_aging::Bool=true, rand_seed::Int=12345)
 
 Initialize the People object with `n_agents_init` agents.
+Uses `rand_seed` to generate per-seed variation in age and sex assignments,
+matching Python's slot-based RNG which produces different populations per seed.
 """
-function init_people!(people::People; use_aging::Bool=true)
+function init_people!(people::People; use_aging::Bool=true, rand_seed::Int=12345)
     n = people.n_agents_init
     uids = UIDs(collect(1:n))
     people.auids = uids
@@ -120,10 +122,10 @@ function init_people!(people::People; use_aging::Bool=true)
     people.slot.raw .= 1:n
     # Set alive
     people.alive.raw .= true
-    # Set sex (roughly 50/50)
-    rng = StableRNG(12345)
+    # Set sex and age using sim seed so each seed gets a different population,
+    # matching Python where slot-based RNG produces per-seed variation.
+    rng = StableRNG(hash(:people_init) ⊻ UInt64(rand_seed))
     people.female.raw .= rand(rng, Bool, n)
-    # Set age (uniform 0-60 if aging, matching Python starsim default)
     if use_aging
         people.age.raw .= rand(rng, n) .* 60.0
     end
@@ -134,7 +136,7 @@ function init_people!(people::People; use_aging::Bool=true)
     people.parent.raw .= INT_NAN
 
     # Seed the slot RNG
-    people.slot_rng = StableRNG(hash(:slot_assignment) ⊻ UInt64(54321))
+    people.slot_rng = StableRNG(hash(:slot_assignment) ⊻ UInt64(rand_seed))
 
     people.initialized = true
     return people

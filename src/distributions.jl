@@ -329,12 +329,11 @@ end
 """
     combine_rvs(rvs_list::Vector{Vector{Float64}}) → Vector{Float64}
 
-Combine multiple random-value vectors into a single Uniform(0,1) vector
-using XOR combining. For two vectors u and v, computes:
-    `xor(reinterpret(UInt64, u_i * v_i), reinterpret(UInt64, u_i - v_i)) / typemax(UInt64)`
-
-This operation is commutative on the XOR part and produces well-distributed
-results when inputs are independent Uniform(0,1) draws.
+Combine multiple random-value vectors into a single pseudo-uniform vector
+using XOR combining. Matches Python starsim's `combine_rvs`:
+  1. Reinterpret each float64 as UInt64 (bit-level)
+  2. Compute `xor(a * b, a - b)` in unsigned integer arithmetic (wrapping)
+  3. Normalize by `typemax(UInt64)`
 
 # Arguments
 - `rvs_list` — vector of Float64 vectors, all the same length
@@ -351,13 +350,13 @@ function combine_rvs(rvs_list::Vector{Vector{Float64}})
     u = rvs_list[1]
     v = rvs_list[2]
 
+    # Match Python: reinterpret floats as UInt64 FIRST, then do integer
+    # arithmetic (wrapping multiply/subtract), then XOR and normalize.
+    # Python: rand_ints = rvs.view(uint64); xor(rand_ints*rand_ints2, rand_ints-rand_ints2)
     @inbounds for i in 1:n
-        prod_val = u[i] * v[i]
-        diff_val = u[i] - v[i]
-        # Reinterpret as UInt64 and XOR
-        prod_bits = reinterpret(UInt64, prod_val)
-        diff_bits = reinterpret(UInt64, diff_val)
-        combined = xor(prod_bits, diff_bits)
+        a = reinterpret(UInt64, u[i])
+        b = reinterpret(UInt64, v[i])
+        combined = xor(a * b, a - b)  # UInt64 wrapping arithmetic
         result[i] = Float64(combined) / Float64(typemax(UInt64))
     end
 
@@ -365,11 +364,9 @@ function combine_rvs(rvs_list::Vector{Vector{Float64}})
     for k in 3:length(rvs_list)
         w = rvs_list[k]
         @inbounds for i in 1:n
-            prod_val = result[i] * w[i]
-            diff_val = result[i] - w[i]
-            prod_bits = reinterpret(UInt64, prod_val)
-            diff_bits = reinterpret(UInt64, diff_val)
-            combined = xor(prod_bits, diff_bits)
+            a = reinterpret(UInt64, result[i])
+            b = reinterpret(UInt64, w[i])
+            combined = xor(a * b, a - b)
             result[i] = Float64(combined) / Float64(typemax(UInt64))
         end
     end
