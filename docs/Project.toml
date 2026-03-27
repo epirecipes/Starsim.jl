@@ -4,3 +4,6 @@ Starsim = "5377e9c4-d40b-43d5-a471-f7d91c643d71"
 
 [sources]
 Starsim = {path = ".."}
+
+[compat]
+Documenter = "1"
