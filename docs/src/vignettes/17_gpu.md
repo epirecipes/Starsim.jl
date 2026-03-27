@@ -82,6 +82,7 @@ Benchmarks on Apple M2 Ultra (Metal GPU, 76 GPU cores):
 | 100K   | 12 | 4.2 | 0.36x |
 | 500K   | 9  | 5.1 | 0.55x |
 | 1M     | 9  | 5.2 | 0.60x |
+| 5M     | 6  | 4.8 | 0.79x |
 
 **Cached edges (static network — single upload):**
 
@@ -91,11 +92,13 @@ Benchmarks on Apple M2 Ultra (Metal GPU, 76 GPU cores):
 | 100K   | 11 | 6.7 | 0.59x |
 | 500K   | 9  | 8.0 | 0.91x |
 | 1M     | 9  | 8.2 | 0.94x |
+| 5M     | 6  | 7.8 | **1.28x** |
 
-The GPU approaches CPU performance at 1M+ agents with cached edges.
-Julia's CPU code is highly optimized on Apple Silicon (native SIMD),
-making GPU acceleration less impactful than on platforms with weaker CPUs
-or discrete GPUs. The GPU path is most useful for:
+GPU overtakes CPU at ~5M agents with cached edges — the crossover where
+GPU parallelism outweighs kernel launch overhead. Julia's CPU code is
+highly optimized on Apple Silicon (native SIMD), making GPU acceleration
+less impactful than on platforms with weaker CPUs or discrete GPUs. The
+GPU path is most useful for:
 
 - Very large simulations (1M+ agents) with static networks
 - Future CUDA.jl support on NVIDIA GPUs (where discrete GPU memory
