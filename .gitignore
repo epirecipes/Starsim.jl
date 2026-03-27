@@ -4,3 +4,8 @@ Manifest.toml
 __pycache__/
 *.pyc
 LocalPreferences.toml
+# Temp cross-validation outputs (keep data CSVs in extensions/*/data/)
+/julia_*.csv
+/python_*.csv
+/_jl_*.csv
+/_py_*.csv
