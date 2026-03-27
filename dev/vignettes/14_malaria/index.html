@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Malaria (metapopulation) · Starsim.jl</title><meta name="title" content="Malaria (metapopulation) · Starsim.jl"/><meta property="og:title" content="Malaria (metapopulation) · Starsim.jl"/><meta property="twitter:title" content="Malaria (metapopulation) · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li class="is-active"><a class="tocitem" href>Malaria (metapopulation)</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Helper-functions"><span>Helper functions</span></a></li><li><a class="tocitem" href="#Define-the-Malaria-module"><span>Define the Malaria module</span></a></li><li><a class="tocitem" href="#Running-the-model"><span>Running the model</span></a></li><li><a class="tocitem" href="#Prevalence-dynamics"><span>Prevalence dynamics</span></a></li><li><a class="tocitem" href="#Four-panel-dashboard"><span>Four-panel dashboard</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Malaria (metapopulation)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Malaria (metapopulation)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Malaria-Metapopulation-Model"><a class="docs-heading-anchor" href="#Malaria-Metapopulation-Model">Malaria Metapopulation Model</a><a id="Malaria-Metapopulation-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Malaria-Metapopulation-Model" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#helper-functions">Helper functions</a></li><li><a href="#define-the-malaria-module">Define the Malaria module</a></li><li><a href="#running-the-model">Running the model</a></li><li><a href="#prevalence-dynamics">Prevalence dynamics</a></li><li><a href="#four-panel-dashboard">Four-panel dashboard</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Not all models in Starsim need to be agent-based. This vignette implements a <strong>compartmental (ODE) malaria model</strong> as a Starsim module, demonstrating how the framework supports non-agent-based components.</p><p>The model is a multi-patch <strong>Ross-Macdonald</strong> system with: - Seasonal mosquito density forcing (sinusoidal) - Human mobility between patches - Euler integration within the Starsim timestep loop</p><p>This follows <code>code/malaria_demo/demo_sim_ss.py</code>.</p><h2 id="Helper-functions"><a class="docs-heading-anchor" href="#Helper-functions">Helper functions</a><a id="Helper-functions-1"></a><a class="docs-heading-anchor-permalink" href="#Helper-functions" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Starsim
+using LinearAlgebra
+using Plots
+
+function analytical_mosquito_density(ivector, hvector, pij, a, b, c, mu, r, tau)
+    xvector = ivector ./ r
+    gvector = xvector .* r ./ (1 .- xvector)
+    n = length(xvector)
+    fvector = zeros(n)
+    for i in 1:n
+        k_i = sum(pij[:, i] .* xvector .* hvector) / sum(pij[:, i] .* hvector)
+        fvector[i] = b * c * k_i / (a * c * k_i / mu + 1)
+    end
+    fmatrix = Diagonal(fvector)
+    cvector = (pij * fmatrix) \ gvector
+    m = cvector .* mu ./ a^2 ./ exp(-mu * tau)
+    return m
+end
+
+function seasonal_sinusoidal(t; amplitude=0.8, peak_day=180)
+    day_of_year = t % 365
+    return max(0.0, 1 + amplitude * sin(2π * (day_of_year - peak_day + 365/4) / 365))
+end</code></pre><pre><code class="nohighlight hljs">seasonal_sinusoidal (generic function with 1 method)</code></pre><h2 id="Define-the-Malaria-module"><a class="docs-heading-anchor" href="#Define-the-Malaria-module">Define the Malaria module</a><a id="Define-the-Malaria-module-1"></a><a class="docs-heading-anchor-permalink" href="#Define-the-Malaria-module" title="Permalink"></a></h2><pre><code class="language-julia hljs">mutable struct MalariaODE &lt;: AbstractModule
+    mod::ModuleData
+
+    # Bionomic parameters
+    a::Float64      # Biting rate
+    b::Float64      # Mosquito-to-human transmission
+    c::Float64      # Human-to-mosquito transmission
+    r::Float64      # Recovery rate
+    mu::Float64     # Mosquito death rate
+    tau::Float64    # Extrinsic incubation period
+
+    # Patch data
+    numpatch::Int
+    hvector::Vector{Float64}   # Population sizes
+    ivector::Vector{Float64}   # Initial incidence
+    pij::Matrix{Float64}       # Mobility matrix
+    m_base::Vector{Float64}    # Baseline mosquito density
+
+    # Compartment state
+    X::Vector{Float64}  # Prevalence per patch
+    C::Vector{Float64}  # Cumulative incidence per patch
+end
+
+function MalariaODE(;
+    name::Symbol = :malaria,
+    a = 0.3, b = 0.1, c = 0.214,
+    r = 1/150, mu = 1/10, tau = 10.0,
+    hvector = [5000.0, 10000.0, 8000.0],
+    ivector = [0.001, 0.003, 0.002],
+    pij = [0.85 0.10 0.05;
+           0.08 0.80 0.12;
+           0.06 0.09 0.85],
+)
+    md = ModuleData(name; label=&quot;Malaria ODE&quot;)
+    n = length(hvector)
+    MalariaODE(md, a, b, c, r, mu, tau,
+               n, copy(hvector), copy(ivector), copy(pij),
+               zeros(n), zeros(n), zeros(n))
+end
+
+Starsim.module_data(m::MalariaODE) = m.mod
+
+function Starsim.init_pre!(m::MalariaODE, sim)
+    md = m.mod
+    md.t = Timeline(start=sim.pars.start, stop=sim.pars.stop, dt=sim.pars.dt)
+
+    npts = md.t.npts
+    results = Result[]
+    for i in 1:m.numpatch
+        push!(results, Result(Symbol(&quot;X_$i&quot;); npts=npts, label=&quot;Prevalence (Patch $i)&quot;, scale=false))
+        push!(results, Result(Symbol(&quot;C_$i&quot;); npts=npts, label=&quot;Cum. incidence (Patch $i)&quot;, scale=false))
+        push!(results, Result(Symbol(&quot;daily_inc_$i&quot;); npts=npts, label=&quot;Daily incidence (Patch $i)&quot;, scale=false))
+        push!(results, Result(Symbol(&quot;m_seasonal_$i&quot;); npts=npts, label=&quot;Mosquito density (Patch $i)&quot;, scale=false))
+        push!(results, Result(Symbol(&quot;eir_$i&quot;); npts=npts, label=&quot;EIR (Patch $i)&quot;, scale=false))
+    end
+    define_results!(m, results...)
+
+    md.initialized = true
+    return m
+end
+
+function Starsim.init_post!(m::MalariaODE, sim)
+    m.m_base = analytical_mosquito_density(
+        m.ivector, m.hvector, m.pij,
+        m.a, m.b, m.c, m.mu, m.r, m.tau,
+    )
+    m.m_base = max.(m.m_base, 1e-10)
+
+    m.X .= m.ivector ./ m.r
+    m.C .= 0.0
+    return m
+end
+
+function Starsim.step!(m::MalariaODE, sim)
+    md = m.mod
+    t = md.t.start + (md.t.ti - 1) * md.t.dt
+    dt = md.t.dt
+
+    X = m.X
+    H = m.hvector
+    pij = m.pij
+    n = m.numpatch
+
+    # Seasonal mosquito density
+    ms = m.m_base .* seasonal_sinusoidal(t)
+
+    # Weighted prevalence at each destination
+    k = (pij&#39; * (X .* H)) ./ (pij&#39; * H)
+
+    # Force of infection
+    Z_numer = m.a^2 * m.b * m.c * exp(-m.mu * m.tau) .* k
+    Z_denom = m.a * m.c .* k .+ m.mu
+    dC = pij * (ms .* Z_numer ./ Z_denom) .* (1 .- X)
+    dX = dC .- m.r .* X
+
+    # Euler update
+    m.X .+= dX .* dt
+    m.C .+= dC .* dt
+
+    return m
+end
+
+function Starsim.update_results!(m::MalariaODE, sim)
+    md = m.mod
+    ti = md.t.ti
+    t = md.t.start + (ti - 1) * md.t.dt
+    n = m.numpatch
+
+    for i in 1:n
+        md.results[Symbol(&quot;X_$i&quot;)][ti] = m.X[i]
+        md.results[Symbol(&quot;C_$i&quot;)][ti] = m.C[i]
+    end
+
+    # Derived quantities
+    X = m.X; H = m.hvector; pij = m.pij
+    ms = m.m_base .* seasonal_sinusoidal(t)
+    k = (pij&#39; * (X .* H)) ./ (pij&#39; * H)
+
+    Z_numer = m.a^2 * m.b * m.c * exp(-m.mu * m.tau) .* k
+    Z_denom = m.a * m.c .* k .+ m.mu
+    dC = pij * (ms .* Z_numer ./ Z_denom) .* (1 .- X)
+
+    Z = m.a * m.c .* k .* exp(-m.mu * m.tau) ./ (m.a * m.c .* k .+ m.mu)
+    eir = ms .* m.a .* (pij * Z)
+
+    for i in 1:n
+        md.results[Symbol(&quot;daily_inc_$i&quot;)][ti] = dC[i]
+        md.results[Symbol(&quot;m_seasonal_$i&quot;)][ti] = ms[i]
+        md.results[Symbol(&quot;eir_$i&quot;)][ti] = eir[i]
+    end
+    return m
+end
+
+function Starsim.finalize!(m::MalariaODE)
+    return m
+end</code></pre><h2 id="Running-the-model"><a class="docs-heading-anchor" href="#Running-the-model">Running the model</a><a id="Running-the-model-1"></a><a class="docs-heading-anchor-permalink" href="#Running-the-model" title="Permalink"></a></h2><pre><code class="language-julia hljs">mal = MalariaODE()
+sim = Sim(
+    modules = mal,
+    n_agents = 1,
+    start = 0.0,
+    stop = 365.0 * 5,
+    dt = 1.0,
+    verbose = 0,
+)
+run!(sim)</code></pre><pre><code class="nohighlight hljs">Sim(1 agents, 0.0→1825.0, dt=1.0, nets=0, dis=0, status=complete)</code></pre><h2 id="Prevalence-dynamics"><a class="docs-heading-anchor" href="#Prevalence-dynamics">Prevalence dynamics</a><a id="Prevalence-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Prevalence-dynamics" title="Permalink"></a></h2><pre><code class="language-julia hljs">npts = sim.t.npts
+tvec = 0:npts-1
+patches = [&quot;Patch 1&quot;, &quot;Patch 2&quot;, &quot;Patch 3&quot;]
+
+p = plot(xlabel=&quot;Time (days)&quot;, ylabel=&quot;Proportion infected&quot;,
+         title=&quot;Malaria Prevalence by Patch&quot;)
+for (i, name) in enumerate(patches)
+    prev = get_result(sim, :malaria, Symbol(&quot;X_$i&quot;))
+    plot!(p, tvec, prev, lw=2, label=name)
+end
+p</code></pre><p><img src="../14_malaria_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Four-panel-dashboard"><a class="docs-heading-anchor" href="#Four-panel-dashboard">Four-panel dashboard</a><a id="Four-panel-dashboard-1"></a><a class="docs-heading-anchor-permalink" href="#Four-panel-dashboard" title="Permalink"></a></h2><pre><code class="language-julia hljs">p1 = plot(title=&quot;Prevalence&quot;, xlabel=&quot;Days&quot;, ylabel=&quot;Proportion&quot;)
+p2 = plot(title=&quot;Daily Incidence&quot;, xlabel=&quot;Days&quot;, ylabel=&quot;New infections/person/day&quot;)
+p3 = plot(title=&quot;Mosquito Density&quot;, xlabel=&quot;Days&quot;, ylabel=&quot;Mosquitoes/person&quot;)
+p4 = plot(title=&quot;EIR&quot;, xlabel=&quot;Days&quot;, ylabel=&quot;EIR&quot;)
+
+for (i, name) in enumerate(patches)
+    plot!(p1, tvec, get_result(sim, :malaria, Symbol(&quot;X_$i&quot;)), label=name, lw=1.5)
+    plot!(p2, tvec, get_result(sim, :malaria, Symbol(&quot;daily_inc_$i&quot;)), label=name, lw=1.5)
+    plot!(p3, tvec, get_result(sim, :malaria, Symbol(&quot;m_seasonal_$i&quot;)), label=name, lw=1.5)
+    plot!(p4, tvec, get_result(sim, :malaria, Symbol(&quot;eir_$i&quot;)), label=name, lw=1.5)
+end
+
+plot(p1, p2, p3, p4, layout=(2, 2), size=(800, 600))</code></pre><p><img src="../14_malaria_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>Starsim supports non-agent-based modules via the generic <code>modules</code> keyword</li><li>The Ross-Macdonald model uses Euler integration within the Starsim timestep loop</li><li>Seasonal mosquito forcing creates annual cycles in prevalence, incidence, and EIR</li><li>Multi-patch mobility allows infection to spread between populations</li><li>This approach enables coupling ODE models with agent-based components in the same simulation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../13_calibration/">« Calibration</a><a class="docs-footer-nextpage" href="../15_composition/">Composition (Catlab) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Cholera (environmental) · Starsim.jl</title><meta name="title" content="Cholera (environmental) · Starsim.jl"/><meta property="og:title" content="Cholera (environmental) · Starsim.jl"/><meta property="twitter:title" content="Cholera (environmental) · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li class="is-active"><a class="tocitem" href>Cholera (environmental)</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Defining-a-custom-Cholera-disease"><span>Defining a custom Cholera disease</span></a></li><li><a class="tocitem" href="#Running-the-simulation"><span>Running the simulation</span></a></li><li><a class="tocitem" href="#Epidemic-dynamics"><span>Epidemic dynamics</span></a></li><li><a class="tocitem" href="#Environmental-reservoir"><span>Environmental reservoir</span></a></li><li><a class="tocitem" href="#Key-metrics"><span>Key metrics</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Cholera (environmental)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Cholera (environmental)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Cholera:-Environmental-Transmission"><a class="docs-heading-anchor" href="#Cholera:-Environmental-Transmission">Cholera: Environmental Transmission</a><a id="Cholera:-Environmental-Transmission-1"></a><a class="docs-heading-anchor-permalink" href="#Cholera:-Environmental-Transmission" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#defining-a-custom-cholera-disease">Defining a custom Cholera disease</a></li><li><a href="#running-the-simulation">Running the simulation</a></li><li><a href="#epidemic-dynamics">Epidemic dynamics</a></li><li><a href="#environmental-reservoir">Environmental reservoir</a></li><li><a href="#key-metrics">Key metrics</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Cholera is a waterborne disease caused by <em>Vibrio cholerae</em>. Unlike diseases transmitted solely through direct contact, cholera involves <strong>dual transmission routes</strong>:</p><ol><li><strong>Direct</strong> — person-to-person via contact networks</li><li><strong>Environmental</strong> — shedding of bacteria into water, which creates  an environmental reservoir</li></ol><p>In this vignette, we build a cholera model in Starsim.jl that captures both routes, following the Python <code>starsim_examples/diseases/cholera.py</code>.</p><h2 id="Defining-a-custom-Cholera-disease"><a class="docs-heading-anchor" href="#Defining-a-custom-Cholera-disease">Defining a custom Cholera disease</a><a id="Defining-a-custom-Cholera-disease-1"></a><a class="docs-heading-anchor-permalink" href="#Defining-a-custom-Cholera-disease" title="Permalink"></a></h2><p>We extend <code>AbstractInfection</code> with additional states for exposed, symptomatic, and recovered compartments, plus an environmental reservoir tracked via results.</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+using Random
+
+# ============================================================================
+# Cholera — custom SEIR-like disease with environmental reservoir
+# ============================================================================
+
+mutable struct Cholera &lt;: AbstractInfection
+    infection::InfectionData
+
+    # SEIR-like states
+    exposed::StateVector{Bool, Vector{Bool}}
+    symptomatic::StateVector{Bool, Vector{Bool}}
+    recovered::StateVector{Bool, Vector{Bool}}
+
+    # Timepoint states
+    ti_exposed::StateVector{Float64, Vector{Float64}}
+    ti_symptomatic::StateVector{Float64, Vector{Float64}}
+    ti_recovered::StateVector{Float64, Vector{Float64}}
+    ti_dead::StateVector{Float64, Vector{Float64}}
+
+    # Parameters
+    dur_exp::Float64
+    dur_symp::Float64
+    dur_asymp::Float64
+    p_symp::Float64
+    p_death::Float64
+    dur_to_dead::Float64
+    asymp_trans::Float64
+
+    # Environmental parameters
+    beta_env::Float64
+    half_sat::Float64
+    shedding_rate::Float64
+    decay_rate::Float64
+
+    # Environmental state (scalar, not per-agent)
+    env_prev::Float64
+
+    rng::StableRNG
+end
+
+function Cholera(;
+    name::Symbol = :cholera,
+    init_prev = 0.005,
+    beta = 0.5,
+    dur_exp = 2.772,
+    dur_symp = 5.0,
+    dur_asymp = 5.5,
+    p_symp = 0.5,
+    p_death = 0.005,
+    dur_to_dead = 1.0,
+    asymp_trans = 0.01,
+    beta_env = 0.5/3,
+    half_sat = 1_000_000.0,
+    shedding_rate = 10.0,
+    decay_rate = 0.033,
+)
+    inf = InfectionData(name; init_prev=init_prev, beta=beta, label=&quot;Cholera&quot;)
+
+    Cholera(
+        inf,
+        BoolState(:exposed; default=false),
+        BoolState(:symptomatic; default=false),
+        BoolState(:recovered; default=false),
+        FloatState(:ti_exposed; default=Inf),
+        FloatState(:ti_symptomatic; default=Inf),
+        FloatState(:ti_recovered; default=Inf),
+        FloatState(:ti_dead; default=Inf),
+        Float64(dur_exp), Float64(dur_symp), Float64(dur_asymp),
+        Float64(p_symp), Float64(p_death), Float64(dur_to_dead),
+        Float64(asymp_trans),
+        Float64(beta_env), Float64(half_sat),
+        Float64(shedding_rate), Float64(decay_rate),
+        0.0,
+        StableRNG(0),
+    )
+end
+
+Starsim.disease_data(d::Cholera) = d.infection.dd
+Starsim.module_data(d::Cholera) = d.infection.dd.mod
+
+function Starsim.init_pre!(d::Cholera, sim)
+    md = module_data(d)
+    md.t = Timeline(start=sim.pars.start, stop=sim.pars.stop, dt=sim.pars.dt)
+    d.rng = StableRNG(hash(md.name) ⊻ sim.pars.rand_seed)
+
+    all_states = [d.infection.susceptible, d.infection.infected,
+                  d.infection.ti_infected, d.infection.rel_sus,
+                  d.infection.rel_trans, d.exposed, d.symptomatic,
+                  d.recovered, d.ti_exposed, d.ti_symptomatic,
+                  d.ti_recovered, d.ti_dead]
+    for s in all_states
+        add_module_state!(sim.people, s)
+    end
+
+    validate_beta!(d, sim)
+
+    npts = md.t.npts
+    define_results!(d,
+        Result(:new_infections; npts=npts, label=&quot;New infections&quot;),
+        Result(:n_susceptible; npts=npts, label=&quot;Susceptible&quot;, scale=false),
+        Result(:n_infected; npts=npts, label=&quot;Infected&quot;, scale=false),
+        Result(:n_symptomatic; npts=npts, label=&quot;Symptomatic&quot;, scale=false),
+        Result(:n_recovered; npts=npts, label=&quot;Recovered&quot;, scale=false),
+        Result(:prevalence; npts=npts, label=&quot;Prevalence&quot;, scale=false),
+        Result(:new_deaths; npts=npts, label=&quot;New deaths&quot;),
+        Result(:env_conc; npts=npts, label=&quot;Environmental concentration&quot;, scale=false),
+    )
+
+    md.initialized = true
+    return d
+end
+
+function Starsim.validate_beta!(d::Cholera, sim)
+    dd = disease_data(d)
+    dt = sim.pars.dt
+    if dd.beta isa Real
+        for (name, _) in sim.networks
+            dd.beta_per_dt[name] = 1.0 - exp(-Float64(dd.beta) * dt)
+        end
+    end
+    return d
+end
+
+function Starsim.init_post!(d::Cholera, sim)
+    people = sim.people
+    active = people.auids.values
+    n = length(active)
+    n_infect = max(1, Int(round(d.infection.dd.init_prev * n)))
+    n_infect = min(n_infect, n)
+
+    infect_uids = UIDs(active[randperm(d.rng, n)[1:n_infect]])
+    d.infection.susceptible[infect_uids] = false
+    d.exposed[infect_uids] = true
+    d.ti_exposed.raw[infect_uids.values] .= 1.0
+
+    # Set prognoses for initial infections
+    for u in infect_uids.values
+        d.infection.ti_infected.raw[u] = 1.0 + d.dur_exp + randn(d.rng) * 0.5
+        if rand(d.rng) &lt; d.p_symp
+            d.ti_symptomatic.raw[u] = d.infection.ti_infected.raw[u]
+            if rand(d.rng) &lt; d.p_death
+                d.ti_dead.raw[u] = d.ti_symptomatic.raw[u] + d.dur_to_dead
+            else
+                d.ti_recovered.raw[u] = d.ti_exposed.raw[u] + d.dur_symp + randn(d.rng)
+            end
+        else
+            d.ti_recovered.raw[u] = d.ti_exposed.raw[u] + d.dur_asymp + rand(d.rng) * 4.0
+        end
+    end
+
+    return d
+end
+
+function Starsim.step_state!(d::Cholera, sim)
+    ti = module_data(d).t.ti
+
+    # Exposed -&gt; infected
+    for u in sim.people.auids.values
+        if d.exposed.raw[u] &amp;&amp; d.infection.ti_infected.raw[u] &lt;= ti
+            d.infection.infected.raw[u] = true
+            d.exposed.raw[u] = false
+        end
+    end
+
+    # Infected -&gt; symptomatic
+    for u in sim.people.auids.values
+        if d.infection.infected.raw[u] &amp;&amp; d.ti_symptomatic.raw[u] &lt;= ti
+            d.symptomatic.raw[u] = true
+        end
+    end
+
+    # Infected -&gt; recovered
+    for u in sim.people.auids.values
+        if d.infection.infected.raw[u] &amp;&amp; d.ti_recovered.raw[u] &lt;= ti
+            d.exposed.raw[u] = false
+            d.infection.infected.raw[u] = false
+            d.symptomatic.raw[u] = false
+            d.recovered.raw[u] = true
+        end
+    end
+
+    # Deaths
+    for u in sim.people.auids.values
+        if d.ti_dead.raw[u] &lt;= ti &amp;&amp; d.ti_dead.raw[u] != Inf
+            request_death!(sim.people, UIDs([u]), ti)
+        end
+    end
+
+    # Update environmental prevalence
+    n_symp = 0; n_asymp = 0
+    for u in sim.people.auids.values
+        if d.symptomatic.raw[u]
+            n_symp += 1
+        elseif d.infection.infected.raw[u] &amp;&amp; !d.symptomatic.raw[u]
+            n_asymp += 1
+        end
+    end
+
+    new_bacteria = d.shedding_rate * (n_symp + d.asymp_trans * n_asymp) * sim.pars.dt
+    old_bacteria = d.env_prev * exp(-d.decay_rate * sim.pars.dt)
+    d.env_prev = new_bacteria + old_bacteria
+
+    return d
+end
+
+function Starsim.set_prognoses!(d::Cholera, target::Int, source::Int, sim)
+    ti = module_data(d).t.ti
+    d.infection.susceptible.raw[target] = false
+    d.exposed.raw[target] = true
+    d.ti_exposed.raw[target] = Float64(ti)
+
+    # Time from exposed to infected
+    d.infection.ti_infected.raw[target] = Float64(ti) + d.dur_exp + randn(d.rng) * 1.0
+
+    # Symptomatic or asymptomatic
+    if rand(d.rng) &lt; d.p_symp
+        d.ti_symptomatic.raw[target] = d.infection.ti_infected.raw[target]
+        if rand(d.rng) &lt; d.p_death
+            d.ti_dead.raw[target] = d.ti_symptomatic.raw[target] + d.dur_to_dead + randn(d.rng) * 0.3
+        else
+            d.ti_recovered.raw[target] = d.ti_exposed.raw[target] + d.dur_symp + randn(d.rng) * 1.0
+        end
+    else
+        d.ti_recovered.raw[target] = d.ti_exposed.raw[target] + d.dur_asymp + rand(d.rng) * 4.0
+    end
+
+    push!(d.infection.infection_sources, (target, source, ti))
+    return
+end
+
+function Starsim.step!(d::Cholera, sim)
+    # Standard network transmission
+    md = module_data(d)
+    ti = md.t.ti
+    dd = disease_data(d)
+    new_infections = 0
+
+    for (net_name, net) in sim.networks
+        edges = network_edges(net)
+        isempty(edges) &amp;&amp; continue
+        beta_dt = get(dd.beta_per_dt, net_name, 0.0)
+        beta_dt == 0.0 &amp;&amp; continue
+
+        p1 = edges.p1; p2 = edges.p2; eb = edges.beta
+        inf_raw = d.infection.infected.raw
+        sus_raw = d.infection.susceptible.raw
+        rt_raw = d.infection.rel_trans.raw
+        rs_raw = d.infection.rel_sus.raw
+
+        @inbounds for i in 1:length(edges)
+            src, trg = p1[i], p2[i]
+            if inf_raw[src] &amp;&amp; sus_raw[trg]
+                p = rt_raw[src] * rs_raw[trg] * beta_dt * eb[i]
+                if rand(d.rng) &lt; p
+                    set_prognoses!(d, trg, src, sim)
+                    new_infections += 1
+                end
+            end
+            if inf_raw[trg] &amp;&amp; sus_raw[src]
+                p = rt_raw[trg] * rs_raw[src] * beta_dt * eb[i]
+                if rand(d.rng) &lt; p
+                    set_prognoses!(d, src, trg, sim)
+                    new_infections += 1
+                end
+            end
+        end
+    end
+
+    # Environmental transmission
+    env_conc = d.env_prev / (d.env_prev + d.half_sat)
+    p_env = env_conc * d.beta_env * sim.pars.dt
+
+    for u in sim.people.auids.values
+        if d.infection.susceptible.raw[u] &amp;&amp; rand(d.rng) &lt; p_env
+            set_prognoses!(d, u, 0, sim)
+            new_infections += 1
+        end
+    end
+
+    return new_infections
+end
+
+function Starsim.step_die!(d::Cholera, death_uids::UIDs)
+    d.infection.susceptible[death_uids] = false
+    d.infection.infected[death_uids] = false
+    d.exposed[death_uids] = false
+    d.symptomatic[death_uids] = false
+    d.recovered[death_uids] = false
+    return d
+end
+
+function Starsim.update_results!(d::Cholera, sim)
+    md = module_data(d)
+    ti = md.t.ti
+    ti &gt; length(md.results[:n_susceptible].values) &amp;&amp; return d
+
+    active = sim.people.auids.values
+    n_sus = 0; n_inf = 0; n_rec = 0; n_symp = 0
+    @inbounds for u in active
+        n_sus += d.infection.susceptible.raw[u]
+        n_inf += d.infection.infected.raw[u]
+        n_rec += d.recovered.raw[u]
+        n_symp += d.symptomatic.raw[u]
+    end
+
+    md.results[:n_susceptible][ti] = Float64(n_sus)
+    md.results[:n_infected][ti] = Float64(n_inf)
+    md.results[:n_recovered][ti] = Float64(n_rec)
+    md.results[:n_symptomatic][ti] = Float64(n_symp)
+    md.results[:prevalence][ti] = length(active) &gt; 0 ? n_inf / Float64(length(active)) : 0.0
+    md.results[:env_conc][ti] = d.env_prev / (d.env_prev + d.half_sat)
+
+    # Count deaths this timestep
+    n_deaths = 0
+    @inbounds for u in active
+        if d.ti_dead.raw[u] == Float64(ti)
+            n_deaths += 1
+        end
+    end
+    md.results[:new_deaths][ti] = Float64(n_deaths)
+    return d
+end
+
+function Starsim.finalize!(d::Cholera)
+    md = module_data(d)
+    for (target, source, ti) in d.infection.infection_sources
+        if ti &gt; 0 &amp;&amp; ti &lt;= length(md.results[:new_infections].values)
+            md.results[:new_infections][ti] += 1.0
+        end
+    end
+    return d
+end</code></pre><h2 id="Running-the-simulation"><a class="docs-heading-anchor" href="#Running-the-simulation">Running the simulation</a><a id="Running-the-simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Running-the-simulation" title="Permalink"></a></h2><pre><code class="language-julia hljs">sim = Sim(
+    n_agents = 5_000,
+    networks = RandomNet(n_contacts=8),
+    diseases = Cholera(beta=0.5),
+    dt = 1.0,
+    stop = 200.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim)</code></pre><pre><code class="nohighlight hljs">Sim(5000 agents, 0.0→200.0, dt=1.0, nets=1, dis=1, status=complete)</code></pre><h2 id="Epidemic-dynamics"><a class="docs-heading-anchor" href="#Epidemic-dynamics">Epidemic dynamics</a><a id="Epidemic-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Epidemic-dynamics" title="Permalink"></a></h2><pre><code class="language-julia hljs">n_sus = get_result(sim, :cholera, :n_susceptible)
+n_inf = get_result(sim, :cholera, :n_infected)
+n_rec = get_result(sim, :cholera, :n_recovered)
+n_symp = get_result(sim, :cholera, :n_symptomatic)
+
+tvec = 0:length(n_sus)-1
+plot(tvec, n_sus, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec, n_inf, label=&quot;Infected&quot;, lw=2, color=:red)
+plot!(tvec, n_symp, label=&quot;Symptomatic&quot;, lw=2, color=:orange, ls=:dash)
+plot!(tvec, n_rec, label=&quot;Recovered&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Count&quot;)
+title!(&quot;Cholera SEIR Dynamics with Environmental Transmission&quot;)</code></pre><p><img src="../09_cholera_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Environmental-reservoir"><a class="docs-heading-anchor" href="#Environmental-reservoir">Environmental reservoir</a><a id="Environmental-reservoir-1"></a><a class="docs-heading-anchor-permalink" href="#Environmental-reservoir" title="Permalink"></a></h2><pre><code class="language-julia hljs">env_conc = get_result(sim, :cholera, :env_conc)
+prev = get_result(sim, :cholera, :prevalence)
+
+p1 = plot(tvec, prev, lw=2, color=:darkred, ylabel=&quot;Prevalence&quot;, label=&quot;Prevalence&quot;)
+p2 = plot(tvec, env_conc, lw=2, color=:teal, ylabel=&quot;Environmental\nconcentration&quot;, label=&quot;Env. conc.&quot;)
+plot(p1, p2, layout=(2, 1), xlabel=&quot;Day&quot;,
+     title=[&quot;Disease Prevalence&quot; &quot;Environmental Reservoir&quot;])</code></pre><p><img src="../09_cholera_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Key-metrics"><a class="docs-heading-anchor" href="#Key-metrics">Key metrics</a><a id="Key-metrics-1"></a><a class="docs-heading-anchor-permalink" href="#Key-metrics" title="Permalink"></a></h2><pre><code class="language-julia hljs">println(&quot;Peak prevalence: $(round(maximum(prev), digits=4))&quot;)
+println(&quot;Peak day: $(argmax(prev))&quot;)
+println(&quot;Final recovered: $(Int(n_rec[end]))&quot;)
+println(&quot;Peak environmental concentration: $(round(maximum(env_conc), digits=6))&quot;)</code></pre><pre><code class="nohighlight hljs">Peak prevalence: 0.5034
+Peak day: 15
+Final recovered: 4984
+Peak environmental concentration: 0.047522</code></pre><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>Cholera’s dual transmission mechanism allows environmental persistence even without direct contact chains</li><li>The environmental reservoir creates a positive feedback loop: more symptomatic cases → more shedding → higher environmental concentration → more infections</li><li>Asymptomatic individuals contribute much less to environmental contamination (100–1000x less shedding)</li><li>Interventions targeting water sanitation (reducing <code>beta_env</code>) can be highly effective</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../08_measles/">« Measles (SEIR)</a><a class="docs-footer-nextpage" href="../10_ebola/">Ebola (severity) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

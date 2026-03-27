@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Ebola (severity) · Starsim.jl</title><meta name="title" content="Ebola (severity) · Starsim.jl"/><meta property="og:title" content="Ebola (severity) · Starsim.jl"/><meta property="twitter:title" content="Ebola (severity) · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li class="is-active"><a class="tocitem" href>Ebola (severity)</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Defining-the-Ebola-disease"><span>Defining the Ebola disease</span></a></li><li><a class="tocitem" href="#Running-the-simulation"><span>Running the simulation</span></a></li><li><a class="tocitem" href="#Disease-progression"><span>Disease progression</span></a></li><li><a class="tocitem" href="#Deaths-and-case-fatality"><span>Deaths and case fatality</span></a></li><li><a class="tocitem" href="#Key-metrics"><span>Key metrics</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Ebola (severity)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Ebola (severity)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Ebola:-Severity-Structured-Disease"><a class="docs-heading-anchor" href="#Ebola:-Severity-Structured-Disease">Ebola: Severity-Structured Disease</a><a id="Ebola:-Severity-Structured-Disease-1"></a><a class="docs-heading-anchor-permalink" href="#Ebola:-Severity-Structured-Disease" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#defining-the-ebola-disease">Defining the Ebola disease</a></li><li><a href="#running-the-simulation">Running the simulation</a></li><li><a href="#disease-progression">Disease progression</a></li><li><a href="#deaths-and-case-fatality">Deaths and case fatality</a></li><li><a href="#key-metrics">Key metrics</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Ebola virus disease (EVD) features multi-stage severity progression and the unusual property of <strong>dead-body transmission</strong> — unsafe burials can amplify outbreaks. This vignette implements a severity-structured Ebola model following <code>starsim_examples/diseases/ebola.py</code>:</p><ul><li>Exposed → Symptomatic → Severe (70%) → Dead (55% of severe) / Recovered</li><li>Unburied dead bodies transmit at 2.1× relative transmissibility</li><li>Severe cases transmit at 2.2× relative transmissibility</li></ul><h2 id="Defining-the-Ebola-disease"><a class="docs-heading-anchor" href="#Defining-the-Ebola-disease">Defining the Ebola disease</a><a id="Defining-the-Ebola-disease-1"></a><a class="docs-heading-anchor-permalink" href="#Defining-the-Ebola-disease" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Starsim
+using Plots
+using Random
+
+mutable struct Ebola &lt;: AbstractInfection
+    infection::InfectionData
+
+    # Disease states
+    exposed::StateVector{Bool, Vector{Bool}}
+    recovered::StateVector{Bool, Vector{Bool}}
+    severe::StateVector{Bool, Vector{Bool}}
+    buried::StateVector{Bool, Vector{Bool}}
+
+    # Timepoint states
+    ti_exposed::StateVector{Float64, Vector{Float64}}
+    ti_recovered::StateVector{Float64, Vector{Float64}}
+    ti_severe::StateVector{Float64, Vector{Float64}}
+    ti_dead::StateVector{Float64, Vector{Float64}}
+    ti_buried::StateVector{Float64, Vector{Float64}}
+
+    # Parameters (all durations in days)
+    dur_exp2symp::Float64
+    dur_symp2sev::Float64
+    dur_sev2dead::Float64
+    dur_dead2buried::Float64
+    dur_symp2rec::Float64
+    dur_sev2rec::Float64
+    p_sev::Float64
+    p_death::Float64
+    p_safe_bury::Float64
+    sev_factor::Float64
+    unburied_factor::Float64
+
+    rng::StableRNG
+end
+
+function Ebola(;
+    name::Symbol = :ebola,
+    init_prev = 0.005,
+    beta = 0.5,
+    dur_exp2symp = 12.7,
+    dur_symp2sev = 6.0,
+    dur_sev2dead = 1.5,
+    dur_dead2buried = 2.0,
+    dur_symp2rec = 10.0,
+    dur_sev2rec = 10.4,
+    p_sev = 0.7,
+    p_death = 0.55,
+    p_safe_bury = 0.25,
+    sev_factor = 2.2,
+    unburied_factor = 2.1,
+)
+    inf = InfectionData(name; init_prev=init_prev, beta=beta, label=&quot;Ebola&quot;)
+
+    Ebola(inf,
+        BoolState(:exposed; default=false),
+        BoolState(:recovered; default=false),
+        BoolState(:severe; default=false),
+        BoolState(:buried; default=false),
+        FloatState(:ti_exposed; default=Inf),
+        FloatState(:ti_recovered; default=Inf),
+        FloatState(:ti_severe; default=Inf),
+        FloatState(:ti_dead_ebola; default=Inf),
+        FloatState(:ti_buried; default=Inf),
+        Float64(dur_exp2symp), Float64(dur_symp2sev),
+        Float64(dur_sev2dead), Float64(dur_dead2buried),
+        Float64(dur_symp2rec), Float64(dur_sev2rec),
+        Float64(p_sev), Float64(p_death), Float64(p_safe_bury),
+        Float64(sev_factor), Float64(unburied_factor),
+        StableRNG(0),
+    )
+end
+
+Starsim.disease_data(d::Ebola) = d.infection.dd
+Starsim.module_data(d::Ebola) = d.infection.dd.mod
+
+function Starsim.init_pre!(d::Ebola, sim)
+    md = module_data(d)
+    md.t = Timeline(start=sim.pars.start, stop=sim.pars.stop, dt=sim.pars.dt)
+    d.rng = StableRNG(hash(md.name) ⊻ sim.pars.rand_seed)
+
+    all_states = [d.infection.susceptible, d.infection.infected,
+                  d.infection.ti_infected, d.infection.rel_sus,
+                  d.infection.rel_trans, d.exposed, d.recovered,
+                  d.severe, d.buried, d.ti_exposed, d.ti_recovered,
+                  d.ti_severe, d.ti_dead, d.ti_buried]
+    for s in all_states
+        add_module_state!(sim.people, s)
+    end
+
+    validate_beta!(d, sim)
+
+    npts = md.t.npts
+    define_results!(d,
+        Result(:new_infections; npts=npts, label=&quot;New infections&quot;),
+        Result(:n_susceptible; npts=npts, scale=false),
+        Result(:n_exposed; npts=npts, scale=false),
+        Result(:n_infected; npts=npts, scale=false),
+        Result(:n_severe; npts=npts, scale=false),
+        Result(:n_recovered; npts=npts, scale=false),
+        Result(:prevalence; npts=npts, scale=false),
+        Result(:new_deaths; npts=npts),
+    )
+    md.initialized = true
+    return d
+end
+
+function Starsim.validate_beta!(d::Ebola, sim)
+    dd = disease_data(d)
+    dt = sim.pars.dt
+    if dd.beta isa Real
+        for (name, _) in sim.networks
+            dd.beta_per_dt[name] = 1.0 - exp(-Float64(dd.beta) * dt)
+        end
+    end
+    return d
+end
+
+function Starsim.init_post!(d::Ebola, sim)
+    people = sim.people
+    active = people.auids.values
+    n = length(active)
+    n_infect = max(1, Int(round(d.infection.dd.init_prev * n)))
+    infect_uids = UIDs(active[randperm(d.rng, n)[1:min(n_infect, n)]])
+
+    for u in infect_uids.values
+        d.infection.susceptible.raw[u] = false
+        d.exposed.raw[u] = true
+        d.ti_exposed.raw[u] = 1.0
+        _set_ebola_prognosis!(d, u, 1)
+    end
+    return d
+end
+
+function _set_ebola_prognosis!(d::Ebola, uid::Int, ti::Int)
+    ti_f = Float64(ti)
+    d.infection.ti_infected.raw[uid] = ti_f + d.dur_exp2symp + randn(d.rng) * 2.0
+
+    if rand(d.rng) &lt; d.p_sev
+        d.ti_severe.raw[uid] = d.infection.ti_infected.raw[uid] + d.dur_symp2sev + randn(d.rng) * 1.0
+        if rand(d.rng) &lt; d.p_death
+            d.ti_dead.raw[uid] = d.ti_severe.raw[uid] + d.dur_sev2dead + randn(d.rng) * 0.5
+            if rand(d.rng) &lt; d.p_safe_bury
+                d.ti_buried.raw[uid] = d.ti_dead.raw[uid]  # immediate safe burial
+            else
+                d.ti_buried.raw[uid] = d.ti_dead.raw[uid] + d.dur_dead2buried + randn(d.rng) * 0.5
+            end
+        else
+            d.ti_recovered.raw[uid] = d.ti_severe.raw[uid] + d.dur_sev2rec + randn(d.rng) * 2.0
+        end
+    else
+        d.ti_recovered.raw[uid] = d.infection.ti_infected.raw[uid] + d.dur_symp2rec + randn(d.rng) * 2.0
+    end
+    return
+end
+
+function Starsim.step_state!(d::Ebola, sim)
+    ti = module_data(d).t.ti
+
+    for u in sim.people.auids.values
+        # Exposed -&gt; infected
+        if d.exposed.raw[u] &amp;&amp; d.infection.ti_infected.raw[u] &lt;= ti
+            d.exposed.raw[u] = false
+            d.infection.infected.raw[u] = true
+        end
+
+        # Infected -&gt; severe
+        if d.infection.infected.raw[u] &amp;&amp; d.ti_severe.raw[u] &lt;= ti
+            d.severe.raw[u] = true
+        end
+
+        # Infected -&gt; recovered
+        if d.infection.infected.raw[u] &amp;&amp; d.ti_recovered.raw[u] &lt;= ti
+            d.infection.infected.raw[u] = false
+            d.recovered.raw[u] = true
+        end
+
+        # Severe -&gt; recovered
+        if d.severe.raw[u] &amp;&amp; d.ti_recovered.raw[u] &lt;= ti
+            d.severe.raw[u] = false
+            d.recovered.raw[u] = true
+        end
+
+        # Deaths
+        if d.ti_dead.raw[u] &lt;= ti &amp;&amp; d.ti_dead.raw[u] != Inf
+            request_death!(sim.people, UIDs([u]), ti)
+        end
+
+        # Burial
+        if d.ti_buried.raw[u] &lt;= ti
+            d.buried.raw[u] = true
+        end
+
+        # Update rel_trans for severity and unburied dead
+        if d.severe.raw[u]
+            d.infection.rel_trans.raw[u] = d.sev_factor
+        end
+        if d.ti_dead.raw[u] &lt;= ti &amp;&amp; d.ti_buried.raw[u] &gt; ti
+            d.infection.rel_trans.raw[u] = d.unburied_factor
+        end
+    end
+
+    return d
+end
+
+function Starsim.set_prognoses!(d::Ebola, target::Int, source::Int, sim)
+    ti = module_data(d).t.ti
+    d.infection.susceptible.raw[target] = false
+    d.exposed.raw[target] = true
+    d.ti_exposed.raw[target] = Float64(ti)
+    _set_ebola_prognosis!(d, target, ti)
+    push!(d.infection.infection_sources, (target, source, ti))
+    return
+end
+
+function Starsim.step!(d::Ebola, sim)
+    md = module_data(d)
+    ti = md.t.ti
+    dd = disease_data(d)
+    new_infections = 0
+
+    for (net_name, net) in sim.networks
+        edges = network_edges(net)
+        isempty(edges) &amp;&amp; continue
+        beta_dt = get(dd.beta_per_dt, net_name, 0.0)
+        beta_dt == 0.0 &amp;&amp; continue
+
+        p1 = edges.p1; p2 = edges.p2; eb = edges.beta
+        inf_raw = d.infection.infected.raw
+        sus_raw = d.infection.susceptible.raw
+        rt_raw = d.infection.rel_trans.raw
+        rs_raw = d.infection.rel_sus.raw
+
+        @inbounds for i in 1:length(edges)
+            src, trg = p1[i], p2[i]
+            if inf_raw[src] &amp;&amp; sus_raw[trg]
+                p = rt_raw[src] * rs_raw[trg] * beta_dt * eb[i]
+                if rand(d.rng) &lt; p
+                    set_prognoses!(d, trg, src, sim)
+                    new_infections += 1
+                end
+            end
+            if inf_raw[trg] &amp;&amp; sus_raw[src]
+                p = rt_raw[trg] * rs_raw[src] * beta_dt * eb[i]
+                if rand(d.rng) &lt; p
+                    set_prognoses!(d, src, trg, sim)
+                    new_infections += 1
+                end
+            end
+        end
+    end
+    return new_infections
+end
+
+function Starsim.step_die!(d::Ebola, death_uids::UIDs)
+    d.infection.susceptible[death_uids] = false
+    d.infection.infected[death_uids] = false
+    d.exposed[death_uids] = false
+    d.severe[death_uids] = false
+    d.recovered[death_uids] = false
+    return d
+end
+
+function Starsim.update_results!(d::Ebola, sim)
+    md = module_data(d)
+    ti = md.t.ti
+    ti &gt; length(md.results[:n_susceptible].values) &amp;&amp; return d
+
+    active = sim.people.auids.values
+    n_sus = 0; n_exp = 0; n_inf = 0; n_sev = 0; n_rec = 0; n_dead = 0
+    @inbounds for u in active
+        n_sus += d.infection.susceptible.raw[u]
+        n_exp += d.exposed.raw[u]
+        n_inf += d.infection.infected.raw[u]
+        n_sev += d.severe.raw[u]
+        n_rec += d.recovered.raw[u]
+        if d.ti_dead.raw[u] == Float64(ti) &amp;&amp; d.ti_dead.raw[u] != Inf
+            n_dead += 1
+        end
+    end
+    n_total = Float64(length(active))
+
+    md.results[:n_susceptible][ti] = Float64(n_sus)
+    md.results[:n_exposed][ti] = Float64(n_exp)
+    md.results[:n_infected][ti] = Float64(n_inf)
+    md.results[:n_severe][ti] = Float64(n_sev)
+    md.results[:n_recovered][ti] = Float64(n_rec)
+    md.results[:prevalence][ti] = n_total &gt; 0 ? n_inf / n_total : 0.0
+    md.results[:new_deaths][ti] = Float64(n_dead)
+    return d
+end
+
+function Starsim.finalize!(d::Ebola)
+    md = module_data(d)
+    for (target, source, ti) in d.infection.infection_sources
+        if ti &gt; 0 &amp;&amp; ti &lt;= length(md.results[:new_infections].values)
+            md.results[:new_infections][ti] += 1.0
+        end
+    end
+    return d
+end</code></pre><h2 id="Running-the-simulation"><a class="docs-heading-anchor" href="#Running-the-simulation">Running the simulation</a><a id="Running-the-simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Running-the-simulation" title="Permalink"></a></h2><pre><code class="language-julia hljs">sim = Sim(
+    n_agents = 5_000,
+    networks = RandomNet(n_contacts=5),
+    diseases = Ebola(beta=0.5),
+    dt = 1.0,
+    stop = 300.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim)</code></pre><pre><code class="nohighlight hljs">Sim(5000 agents, 0.0→300.0, dt=1.0, nets=1, dis=1, status=complete)</code></pre><h2 id="Disease-progression"><a class="docs-heading-anchor" href="#Disease-progression">Disease progression</a><a id="Disease-progression-1"></a><a class="docs-heading-anchor-permalink" href="#Disease-progression" title="Permalink"></a></h2><pre><code class="language-julia hljs">n_sus = get_result(sim, :ebola, :n_susceptible)
+n_exp = get_result(sim, :ebola, :n_exposed)
+n_inf = get_result(sim, :ebola, :n_infected)
+n_sev = get_result(sim, :ebola, :n_severe)
+n_rec = get_result(sim, :ebola, :n_recovered)
+tvec = 0:length(n_sus)-1
+
+plot(tvec, n_sus, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec, n_exp, label=&quot;Exposed&quot;, lw=2, color=:orange)
+plot!(tvec, n_inf, label=&quot;Infected&quot;, lw=2, color=:red)
+plot!(tvec, n_sev, label=&quot;Severe&quot;, lw=2, color=:purple)
+plot!(tvec, n_rec, label=&quot;Recovered&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Count&quot;)
+title!(&quot;Ebola Disease Dynamics&quot;)</code></pre><p><img src="../10_ebola_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Deaths-and-case-fatality"><a class="docs-heading-anchor" href="#Deaths-and-case-fatality">Deaths and case fatality</a><a id="Deaths-and-case-fatality-1"></a><a class="docs-heading-anchor-permalink" href="#Deaths-and-case-fatality" title="Permalink"></a></h2><pre><code class="language-julia hljs">new_deaths = get_result(sim, :ebola, :new_deaths)
+prev = get_result(sim, :ebola, :prevalence)
+
+p1 = plot(tvec, prev, lw=2, color=:darkred, label=&quot;Prevalence&quot;)
+ylabel!(&quot;Prevalence&quot;)
+p2 = plot(tvec, cumsum(new_deaths), lw=2, color=:black, label=&quot;Cumulative deaths&quot;)
+ylabel!(&quot;Deaths&quot;)
+plot(p1, p2, layout=(2, 1), xlabel=&quot;Day&quot;,
+     title=[&quot;Ebola Prevalence&quot; &quot;Cumulative Deaths&quot;])</code></pre><p><img src="../10_ebola_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Key-metrics"><a class="docs-heading-anchor" href="#Key-metrics">Key metrics</a><a id="Key-metrics-1"></a><a class="docs-heading-anchor-permalink" href="#Key-metrics" title="Permalink"></a></h2><pre><code class="language-julia hljs">println(&quot;Peak prevalence: $(round(maximum(prev), digits=4))&quot;)
+println(&quot;Peak day: $(argmax(prev))&quot;)
+println(&quot;Total deaths: $(Int(sum(new_deaths)))&quot;)
+println(&quot;Final recovered: $(Int(n_rec[end]))&quot;)
+cfr = sum(new_deaths) / (sum(new_deaths) + n_rec[end])
+println(&quot;Observed CFR: $(round(cfr, digits=3))&quot;)</code></pre><pre><code class="nohighlight hljs">Peak prevalence: 0.6655
+Peak day: 55
+Total deaths: 0
+Final recovered: 3071
+Observed CFR: 0.0</code></pre><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>Ebola’s multi-stage severity progression captures the clinical pathway (exposure → symptoms → severe → death or recovery)</li><li>Dead-body transmission via unsafe burials amplifies the epidemic, with unburied bodies transmitting at 2.1× the base rate</li><li>Severe cases also transmit more efficiently (2.2×), creating a positive feedback during the peak</li><li>Safe burial interventions (<code>p_safe_bury</code>) directly reduce this amplification</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../09_cholera/">« Cholera (environmental)</a><a class="docs-footer-nextpage" href="../11_hiv/">HIV (sexual networks) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

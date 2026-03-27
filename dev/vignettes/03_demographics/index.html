@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Demographics · Starsim.jl</title><meta name="title" content="Demographics · Starsim.jl"/><meta property="og:title" content="Demographics · Starsim.jl"/><meta property="twitter:title" content="Demographics · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li class="is-active"><a class="tocitem" href>Demographics</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#A-simulation-without-demographics"><span>A simulation without demographics</span></a></li><li><a class="tocitem" href="#Adding-births-and-deaths"><span>Adding births and deaths</span></a></li><li><a class="tocitem" href="#Visualizing-population-change"><span>Visualizing population change</span></a></li><li><a class="tocitem" href="#Population-growth-vs-decline"><span>Population growth vs decline</span></a></li><li><a class="tocitem" href="#Impact-of-demographics-on-disease-dynamics"><span>Impact of demographics on disease dynamics</span></a></li><li><a class="tocitem" href="#Epidemic-curves-with-demographics"><span>Epidemic curves with demographics</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Demographics</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Demographics</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Demographics"><a class="docs-heading-anchor" href="#Demographics">Demographics</a><a id="Demographics-1"></a><a class="docs-heading-anchor-permalink" href="#Demographics" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#a-simulation-without-demographics">A simulation without demographics</a></li><li><a href="#adding-births-and-deaths">Adding births and deaths</a></li><li><a href="#visualizing-population-change">Visualizing population change</a></li><li><a href="#population-growth-vs-decline">Population growth vs decline</a></li><li><a href="#impact-of-demographics-on-disease-dynamics">Impact of demographics on disease dynamics</a></li><li><a href="#epidemic-curves-with-demographics">Epidemic curves with demographics</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>This vignette demonstrates how to add <strong>demographic processes</strong> — births, deaths, and aging — to a Starsim.jl simulation. Demographics change the population size over time and interact with disease dynamics in important ways: new births introduce susceptible individuals, while deaths remove agents regardless of disease state.</p><h2 id="A-simulation-without-demographics"><a class="docs-heading-anchor" href="#A-simulation-without-demographics">A simulation without demographics</a><a id="A-simulation-without-demographics-1"></a><a class="docs-heading-anchor-permalink" href="#A-simulation-without-demographics" title="Permalink"></a></h2><p>First, let’s run a baseline SIR model <em>without</em> demographics for comparison:</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim_base = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_base)
+
+n_alive_base = get_result(sim_base, :n_alive)
+println(&quot;Population (no demographics): $(Int(n_alive_base[1])) → $(Int(n_alive_base[end]))&quot;)</code></pre><pre><code class="nohighlight hljs">Population (no demographics): 1000 → 1000</code></pre><h2 id="Adding-births-and-deaths"><a class="docs-heading-anchor" href="#Adding-births-and-deaths">Adding births and deaths</a><a id="Adding-births-and-deaths-1"></a><a class="docs-heading-anchor-permalink" href="#Adding-births-and-deaths" title="Permalink"></a></h2><p>The <code>Births</code> and <code>Deaths</code> modules add demographic processes. Rates are specified <strong>per 1,000 people per year</strong>.</p><pre><code class="language-julia hljs">sim_demo = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    demographics = [Births(birth_rate=20.0), Deaths(death_rate=15.0)],
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_demo)
+
+n_alive_demo = get_result(sim_demo, :n_alive)
+println(&quot;Population (with demographics): $(Int(n_alive_demo[1])) → $(Int(n_alive_demo[end]))&quot;)</code></pre><pre><code class="nohighlight hljs">Population (with demographics): 1020 → 1221</code></pre><h2 id="Visualizing-population-change"><a class="docs-heading-anchor" href="#Visualizing-population-change">Visualizing population change</a><a id="Visualizing-population-change-1"></a><a class="docs-heading-anchor-permalink" href="#Visualizing-population-change" title="Permalink"></a></h2><pre><code class="language-julia hljs">tvec_base = 0:length(n_alive_base)-1
+tvec_demo = 0:length(n_alive_demo)-1
+
+plot(tvec_base, n_alive_base, label=&quot;No demographics&quot;, lw=2, color=:blue, ls=:dash)
+plot!(tvec_demo, n_alive_demo, label=&quot;With demographics&quot;, lw=2, color=:red)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Population size&quot;)
+title!(&quot;Effect of Demographics on Population&quot;)</code></pre><p><img src="../03_demographics_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Population-growth-vs-decline"><a class="docs-heading-anchor" href="#Population-growth-vs-decline">Population growth vs decline</a><a id="Population-growth-vs-decline-1"></a><a class="docs-heading-anchor-permalink" href="#Population-growth-vs-decline" title="Permalink"></a></h2><p>When the birth rate exceeds the death rate, the population grows. When the death rate exceeds the birth rate, the population declines.</p><pre><code class="language-julia hljs"># Growing population
+sim_grow = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    demographics = [Births(birth_rate=30.0), Deaths(death_rate=10.0)],
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_grow)
+
+# Declining population
+sim_decline = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    demographics = [Births(birth_rate=10.0), Deaths(death_rate=30.0)],
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_decline)
+
+n_grow = get_result(sim_grow, :n_alive)
+n_decline = get_result(sim_decline, :n_alive)
+
+tvec_g = 0:length(n_grow)-1
+tvec_d = 0:length(n_decline)-1
+
+plot(tvec_g, n_grow, label=&quot;Growth (BR=30, DR=10)&quot;, lw=2, color=:green)
+plot!(tvec_d, n_decline, label=&quot;Decline (BR=10, DR=30)&quot;, lw=2, color=:orange)
+hline!([1000], label=&quot;Initial&quot;, lw=1, ls=:dot, color=:gray)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Population size&quot;)
+title!(&quot;Population Growth vs Decline&quot;)</code></pre><p><img src="../03_demographics_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Impact-of-demographics-on-disease-dynamics"><a class="docs-heading-anchor" href="#Impact-of-demographics-on-disease-dynamics">Impact of demographics on disease dynamics</a><a id="Impact-of-demographics-on-disease-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Impact-of-demographics-on-disease-dynamics" title="Permalink"></a></h2><p>Demographics affect disease dynamics because newborns enter as susceptible and deaths remove agents from all compartments.</p><pre><code class="language-julia hljs">prev_base = get_result(sim_base, :sir, :prevalence)
+prev_demo = get_result(sim_demo, :sir, :prevalence)
+
+tvec_b = 0:length(prev_base)-1
+tvec_d = 0:length(prev_demo)-1
+
+plot(tvec_b, prev_base, label=&quot;No demographics&quot;, lw=2, color=:blue, ls=:dash)
+plot!(tvec_d, prev_demo, label=&quot;With demographics&quot;, lw=2, color=:red)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Demographics and SIR Prevalence&quot;)</code></pre><p><img src="../03_demographics_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h2 id="Epidemic-curves-with-demographics"><a class="docs-heading-anchor" href="#Epidemic-curves-with-demographics">Epidemic curves with demographics</a><a id="Epidemic-curves-with-demographics-1"></a><a class="docs-heading-anchor-permalink" href="#Epidemic-curves-with-demographics" title="Permalink"></a></h2><pre><code class="language-julia hljs">n_sus = get_result(sim_demo, :sir, :n_susceptible)
+n_inf = get_result(sim_demo, :sir, :n_infected)
+n_rec = get_result(sim_demo, :sir, :n_recovered)
+tvec = 0:length(n_sus)-1
+
+plot(tvec, n_sus, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec, n_inf, label=&quot;Infected&quot;, lw=2, color=:red)
+plot!(tvec, n_rec, label=&quot;Recovered&quot;, lw=2, color=:green)
+plot!(tvec, n_alive_demo, label=&quot;Total alive&quot;, lw=2, color=:black, ls=:dash)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number of agents&quot;)
+title!(&quot;SIR with Demographics&quot;)</code></pre><p><img src="../03_demographics_files/figure-commonmark/cell-7-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li><code>Births(birth_rate=...)</code> and <code>Deaths(death_rate=...)</code> add demographic turnover</li><li>Rates are per 1,000 people per year</li><li>Newborns enter as susceptible, replenishing the susceptible pool</li><li>Deaths remove agents from any compartment</li><li>The balance between birth and death rates determines population trajectory</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../02_building_a_model/">« Building a model</a><a class="docs-footer-nextpage" href="../04_diseases/">Disease models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

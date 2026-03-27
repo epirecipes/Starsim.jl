@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Disease models · Starsim.jl</title><meta name="title" content="Disease models · Starsim.jl"/><meta property="og:title" content="Disease models · Starsim.jl"/><meta property="twitter:title" content="Disease models · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li class="is-active"><a class="tocitem" href>Disease models</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#SIR:-susceptible-infected-recovered"><span>SIR: susceptible → infected → recovered</span></a></li><li><a class="tocitem" href="#SIS:-susceptible-infected-susceptible"><span>SIS: susceptible → infected → susceptible</span></a></li><li><a class="tocitem" href="#SEIR:-susceptible-exposed-infected-recovered"><span>SEIR: susceptible → exposed → infected → recovered</span></a></li><li><a class="tocitem" href="#Comparing-prevalence-across-models"><span>Comparing prevalence across models</span></a></li><li><a class="tocitem" href="#Modifying-disease-parameters"><span>Modifying disease parameters</span></a></li><li><a class="tocitem" href="#Disease-induced-mortality"><span>Disease-induced mortality</span></a></li><li><a class="tocitem" href="#Multiple-diseases-simultaneously"><span>Multiple diseases simultaneously</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Disease models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Disease models</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Disease-Models"><a class="docs-heading-anchor" href="#Disease-Models">Disease Models</a><a id="Disease-Models-1"></a><a class="docs-heading-anchor-permalink" href="#Disease-Models" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#sir-susceptible--infected--recovered">SIR: susceptible → infected → recovered</a></li><li><a href="#sis-susceptible--infected--susceptible">SIS: susceptible → infected → susceptible</a></li><li><a href="#seir-susceptible--exposed--infected--recovered">SEIR: susceptible → exposed → infected → recovered</a></li><li><a href="#comparing-prevalence-across-models">Comparing prevalence across models</a></li><li><a href="#modifying-disease-parameters">Modifying disease parameters</a><ul><li><a href="#varying-beta">Varying beta</a></li><li><a href="#varying-infectious-duration">Varying infectious duration</a></li></ul></li><li><a href="#disease-induced-mortality">Disease-induced mortality</a></li><li><a href="#multiple-diseases-simultaneously">Multiple diseases simultaneously</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Starsim.jl ships with several built-in disease models: <strong>SIR</strong>, <strong>SIS</strong>, and <strong>SEIR</strong>. This vignette compares their dynamics, shows how to modify disease parameters, and demonstrates running multiple diseases simultaneously.</p><h2 id="SIR:-susceptible-infected-recovered"><a class="docs-heading-anchor" href="#SIR:-susceptible-infected-recovered">SIR: susceptible → infected → recovered</a><a id="SIR:-susceptible-infected-recovered-1"></a><a class="docs-heading-anchor-permalink" href="#SIR:-susceptible-infected-recovered" title="Permalink"></a></h2><p>The classic SIR model. Recovered individuals gain permanent immunity.</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim_sir = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_sir)
+
+n_sus_sir = get_result(sim_sir, :sir, :n_susceptible)
+n_inf_sir = get_result(sim_sir, :sir, :n_infected)
+n_rec_sir = get_result(sim_sir, :sir, :n_recovered)
+tvec_sir = 0:length(n_sus_sir)-1
+
+plot(tvec_sir, n_sus_sir, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec_sir, n_inf_sir, label=&quot;Infected&quot;, lw=2, color=:red)
+plot!(tvec_sir, n_rec_sir, label=&quot;Recovered&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number of agents&quot;)
+title!(&quot;SIR Dynamics&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-2-output-1.svg" alt/></p><h2 id="SIS:-susceptible-infected-susceptible"><a class="docs-heading-anchor" href="#SIS:-susceptible-infected-susceptible">SIS: susceptible → infected → susceptible</a><a id="SIS:-susceptible-infected-susceptible-1"></a><a class="docs-heading-anchor-permalink" href="#SIS:-susceptible-infected-susceptible" title="Permalink"></a></h2><p>In SIS, infected individuals return to the susceptible state — there is no lasting immunity. This produces endemic equilibria.</p><pre><code class="language-julia hljs">sim_sis = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_sis)
+
+n_sus_sis = get_result(sim_sis, :sis, :n_susceptible)
+n_inf_sis = get_result(sim_sis, :sis, :n_infected)
+tvec_sis = 0:length(n_sus_sis)-1
+
+plot(tvec_sis, n_sus_sis, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec_sis, n_inf_sis, label=&quot;Infected&quot;, lw=2, color=:red)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number of agents&quot;)
+title!(&quot;SIS Dynamics (Endemic Equilibrium)&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-3-output-1.svg" alt/></p><h2 id="SEIR:-susceptible-exposed-infected-recovered"><a class="docs-heading-anchor" href="#SEIR:-susceptible-exposed-infected-recovered">SEIR: susceptible → exposed → infected → recovered</a><a id="SEIR:-susceptible-exposed-infected-recovered-1"></a><a class="docs-heading-anchor-permalink" href="#SEIR:-susceptible-exposed-infected-recovered" title="Permalink"></a></h2><p>SEIR adds a latent (exposed) period before individuals become infectious. This delays the epidemic peak.</p><pre><code class="language-julia hljs">sim_seir = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SEIR(beta=beta, dur_exp=2.0, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_seir)
+
+n_sus_seir  = get_result(sim_seir, :seir, :n_susceptible)
+n_exp_seir  = get_result(sim_seir, :seir, :n_exposed)
+n_inf_seir  = get_result(sim_seir, :seir, :n_infected)
+n_rec_seir  = get_result(sim_seir, :seir, :n_recovered)
+tvec_seir = 0:length(n_sus_seir)-1
+
+plot(tvec_seir, n_sus_seir, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec_seir, n_exp_seir, label=&quot;Exposed&quot;, lw=2, color=:orange)
+plot!(tvec_seir, n_inf_seir, label=&quot;Infected&quot;, lw=2, color=:red)
+plot!(tvec_seir, n_rec_seir, label=&quot;Recovered&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number of agents&quot;)
+title!(&quot;SEIR Dynamics&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Comparing-prevalence-across-models"><a class="docs-heading-anchor" href="#Comparing-prevalence-across-models">Comparing prevalence across models</a><a id="Comparing-prevalence-across-models-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-prevalence-across-models" title="Permalink"></a></h2><pre><code class="language-julia hljs">prev_sir  = get_result(sim_sir,  :sir,  :prevalence)
+prev_sis  = get_result(sim_sis,  :sis,  :prevalence)
+prev_seir = get_result(sim_seir, :seir, :prevalence)
+
+tvec_sir2  = 0:length(prev_sir)-1
+tvec_sis2  = 0:length(prev_sis)-1
+tvec_seir2 = 0:length(prev_seir)-1
+
+plot(tvec_sir2,  prev_sir,  label=&quot;SIR&quot;,  lw=2, color=:blue)
+plot!(tvec_sis2,  prev_sis,  label=&quot;SIS&quot;,  lw=2, color=:red)
+plot!(tvec_seir2, prev_seir, label=&quot;SEIR&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Prevalence Comparison: SIR vs SIS vs SEIR&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Modifying-disease-parameters"><a class="docs-heading-anchor" href="#Modifying-disease-parameters">Modifying disease parameters</a><a id="Modifying-disease-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Modifying-disease-parameters" title="Permalink"></a></h2><p>The transmission rate <code>beta</code> and infectious duration <code>dur_inf</code> are key drivers of epidemic size. Let’s explore their effect.</p><h3 id="Varying-beta"><a class="docs-heading-anchor" href="#Varying-beta">Varying beta</a><a id="Varying-beta-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-beta" title="Permalink"></a></h3><pre><code class="language-julia hljs">betas = [0.01, 0.05, 0.10]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Beta on SIR&quot;)
+
+for (i, b) in enumerate(betas)
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=b, dur_inf=4.0, init_prev=0.01),
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;β=$b&quot;, lw=2)
+end
+p</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h3 id="Varying-infectious-duration"><a class="docs-heading-anchor" href="#Varying-infectious-duration">Varying infectious duration</a><a id="Varying-infectious-duration-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-infectious-duration" title="Permalink"></a></h3><pre><code class="language-julia hljs">durations = [2.0, 4.0, 8.0]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Infectious Duration on SIR&quot;)
+
+for d in durations
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=d, init_prev=0.01),
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;dur_inf=$d&quot;, lw=2)
+end
+p</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-7-output-1.svg" alt/></p><h2 id="Disease-induced-mortality"><a class="docs-heading-anchor" href="#Disease-induced-mortality">Disease-induced mortality</a><a id="Disease-induced-mortality-1"></a><a class="docs-heading-anchor-permalink" href="#Disease-induced-mortality" title="Permalink"></a></h2><p>The <code>p_death</code> parameter sets the probability of death upon infection.</p><pre><code class="language-julia hljs">sim_lethal = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01, p_death=0.02),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_lethal)
+
+n_alive = get_result(sim_lethal, :n_alive)
+tvec = 0:length(n_alive)-1
+plot(tvec, n_alive, label=&quot;Population (p_death=0.02)&quot;, lw=2, color=:purple)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Population size&quot;)
+title!(&quot;SIR with Disease-Induced Mortality&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-8-output-1.svg" alt/></p><h2 id="Multiple-diseases-simultaneously"><a class="docs-heading-anchor" href="#Multiple-diseases-simultaneously">Multiple diseases simultaneously</a><a id="Multiple-diseases-simultaneously-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-diseases-simultaneously" title="Permalink"></a></h2><p>Starsim supports running multiple diseases in the same simulation. Each disease operates independently on the same population.</p><pre><code class="language-julia hljs">sim_multi = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = [
+        SIR(name=:flu, beta=0.08, dur_inf=3.0, init_prev=0.01),
+        SIS(name=:cold, beta=0.05, dur_inf=3.0, init_prev=0.02),
+    ],
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_multi)
+
+prev_flu  = get_result(sim_multi, :flu, :prevalence)
+prev_cold = get_result(sim_multi, :cold, :prevalence)
+
+tvec_flu  = 0:length(prev_flu)-1
+tvec_cold = 0:length(prev_cold)-1
+
+plot(tvec_flu,  prev_flu,  label=&quot;Flu (SIR)&quot;,  lw=2, color=:red)
+plot!(tvec_cold, prev_cold, label=&quot;Cold (SIS)&quot;, lw=2, color=:blue)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Two Diseases in One Simulation&quot;)</code></pre><p><img src="../04_diseases_files/figure-commonmark/cell-9-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><table><tr><th style="text-align: right">Model</th><th style="text-align: right">Compartments</th><th style="text-align: right">Key feature</th></tr><tr><td style="text-align: right">SIR</td><td style="text-align: right">S → I → R</td><td style="text-align: right">Permanent immunity; single epidemic wave</td></tr><tr><td style="text-align: right">SIS</td><td style="text-align: right">S → I → S</td><td style="text-align: right">No immunity; endemic equilibrium</td></tr><tr><td style="text-align: right">SEIR</td><td style="text-align: right">S → E → I → R</td><td style="text-align: right">Latent period delays peak</td></tr></table><ul><li>Increase <code>beta</code> or <code>dur_inf</code> to produce larger epidemics</li><li>Use <code>p_death</code> for disease-induced mortality</li><li>Multiple diseases can share the same population and network</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../03_demographics/">« Demographics</a><a class="docs-footer-nextpage" href="../05_networks/">Contact networks »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Interventions · Starsim.jl</title><meta name="title" content="Interventions · Starsim.jl"/><meta property="og:title" content="Interventions · Starsim.jl"/><meta property="twitter:title" content="Interventions · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li class="is-active"><a class="tocitem" href>Interventions</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Baseline:-no-intervention"><span>Baseline: no intervention</span></a></li><li><a class="tocitem" href="#Defining-a-vaccine-product"><span>Defining a vaccine product</span></a></li><li><a class="tocitem" href="#Routine-delivery"><span>Routine delivery</span></a></li><li><a class="tocitem" href="#Campaign-delivery"><span>Campaign delivery</span></a></li><li><a class="tocitem" href="#Comparing-baseline-vs-interventions"><span>Comparing baseline vs interventions</span></a></li><li><a class="tocitem" href="#Epidemic-curves:-baseline-vs-routine-vaccination"><span>Epidemic curves: baseline vs routine vaccination</span></a></li><li><a class="tocitem" href="#Varying-vaccine-efficacy"><span>Varying vaccine efficacy</span></a></li><li><a class="tocitem" href="#Varying-routine-delivery-probability"><span>Varying routine delivery probability</span></a></li><li><a class="tocitem" href="#Combining-routine-and-campaign-delivery"><span>Combining routine and campaign delivery</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Interventions</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Interventions</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Interventions"><a class="docs-heading-anchor" href="#Interventions">Interventions</a><a id="Interventions-1"></a><a class="docs-heading-anchor-permalink" href="#Interventions" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#baseline-no-intervention">Baseline: no intervention</a></li><li><a href="#defining-a-vaccine-product">Defining a vaccine product</a></li><li><a href="#routine-delivery">Routine delivery</a></li><li><a href="#campaign-delivery">Campaign delivery</a></li><li><a href="#comparing-baseline-vs-interventions">Comparing baseline vs interventions</a></li><li><a href="#epidemic-curves-baseline-vs-routine-vaccination">Epidemic curves: baseline vs routine vaccination</a></li><li><a href="#varying-vaccine-efficacy">Varying vaccine efficacy</a></li><li><a href="#varying-routine-delivery-probability">Varying routine delivery probability</a></li><li><a href="#combining-routine-and-campaign-delivery">Combining routine and campaign delivery</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Interventions in Starsim.jl allow you to model public health responses: vaccination campaigns, routine immunization programs, and more. This vignette demonstrates how to define vaccine products and deliver them through <strong>routine</strong> and <strong>campaign</strong> delivery mechanisms, then compare epidemic outcomes.</p><h2 id="Baseline:-no-intervention"><a class="docs-heading-anchor" href="#Baseline:-no-intervention">Baseline: no intervention</a><a id="Baseline:-no-intervention-1"></a><a class="docs-heading-anchor-permalink" href="#Baseline:-no-intervention" title="Permalink"></a></h2><p>First, we run an SIR simulation without any intervention as a reference.</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim_base = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_base)
+
+prev_base = get_result(sim_base, :sir, :prevalence)
+println(&quot;Baseline peak prevalence: $(round(maximum(prev_base), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Baseline peak prevalence: 0.112</code></pre><h2 id="Defining-a-vaccine-product"><a class="docs-heading-anchor" href="#Defining-a-vaccine-product">Defining a vaccine product</a><a id="Defining-a-vaccine-product-1"></a><a class="docs-heading-anchor-permalink" href="#Defining-a-vaccine-product" title="Permalink"></a></h2><p>A <code>Vx</code> product defines what the vaccine does. The <code>efficacy</code> parameter is the probability that vaccination successfully immunizes an individual.</p><pre><code class="language-julia hljs">vaccine = Vx(efficacy=0.9)</code></pre><pre><code class="nohighlight hljs">Vx(:vx, &quot;Vaccine&quot;, 0.9, StableRNGs.LehmerRNG(state=0x00000000000000000000000000000001))</code></pre><h2 id="Routine-delivery"><a class="docs-heading-anchor" href="#Routine-delivery">Routine delivery</a><a id="Routine-delivery-1"></a><a class="docs-heading-anchor-permalink" href="#Routine-delivery" title="Permalink"></a></h2><p><code>RoutineDelivery</code> vaccinates a fraction of the population at every timestep. This mimics continuous vaccination programs like childhood immunization.</p><pre><code class="language-julia hljs">routine = RoutineDelivery(product=vaccine, prob=0.01, disease_name=:sir)
+
+sim_routine = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    interventions = routine,
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_routine)
+
+prev_routine = get_result(sim_routine, :sir, :prevalence)
+println(&quot;Routine vaccination peak prevalence: $(round(maximum(prev_routine), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Routine vaccination peak prevalence: 0.085</code></pre><h2 id="Campaign-delivery"><a class="docs-heading-anchor" href="#Campaign-delivery">Campaign delivery</a><a id="Campaign-delivery-1"></a><a class="docs-heading-anchor-permalink" href="#Campaign-delivery" title="Permalink"></a></h2><p><code>CampaignDelivery</code> vaccinates a fraction of the population at specific time points. This mimics mass vaccination campaigns.</p><pre><code class="language-julia hljs">campaign = CampaignDelivery(
+    product = vaccine,
+    coverage = 0.5,
+    years = [30.0, 60.0],
+    disease_name = :sir,
+)
+
+sim_campaign = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    interventions = campaign,
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_campaign)
+
+prev_campaign = get_result(sim_campaign, :sir, :prevalence)
+println(&quot;Campaign vaccination peak prevalence: $(round(maximum(prev_campaign), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Campaign vaccination peak prevalence: 0.112</code></pre><h2 id="Comparing-baseline-vs-interventions"><a class="docs-heading-anchor" href="#Comparing-baseline-vs-interventions">Comparing baseline vs interventions</a><a id="Comparing-baseline-vs-interventions-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-baseline-vs-interventions" title="Permalink"></a></h2><pre><code class="language-julia hljs">tvec_b = 0:length(prev_base)-1
+tvec_r = 0:length(prev_routine)-1
+tvec_c = 0:length(prev_campaign)-1
+
+plot(tvec_b, prev_base, label=&quot;No intervention&quot;, lw=2, color=:red)
+plot!(tvec_r, prev_routine, label=&quot;Routine (1%/day)&quot;, lw=2, color=:blue)
+plot!(tvec_c, prev_campaign, label=&quot;Campaign (50% at days 30,60)&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Impact of Vaccination Strategies&quot;)</code></pre><p><img src="../06_interventions_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h2 id="Epidemic-curves:-baseline-vs-routine-vaccination"><a class="docs-heading-anchor" href="#Epidemic-curves:-baseline-vs-routine-vaccination">Epidemic curves: baseline vs routine vaccination</a><a id="Epidemic-curves:-baseline-vs-routine-vaccination-1"></a><a class="docs-heading-anchor-permalink" href="#Epidemic-curves:-baseline-vs-routine-vaccination" title="Permalink"></a></h2><pre><code class="language-julia hljs">n_inf_base = get_result(sim_base, :sir, :n_infected)
+n_inf_rout = get_result(sim_routine, :sir, :n_infected)
+
+tvec_ib = 0:length(n_inf_base)-1
+tvec_ir = 0:length(n_inf_rout)-1
+
+plot(tvec_ib, n_inf_base, label=&quot;No intervention&quot;, lw=2, color=:red)
+plot!(tvec_ir, n_inf_rout, label=&quot;Routine vaccination&quot;, lw=2, color=:blue)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number infected&quot;)
+title!(&quot;Infections: Baseline vs Routine Vaccination&quot;)</code></pre><p><img src="../06_interventions_files/figure-commonmark/cell-7-output-1.svg" alt/></p><h2 id="Varying-vaccine-efficacy"><a class="docs-heading-anchor" href="#Varying-vaccine-efficacy">Varying vaccine efficacy</a><a id="Varying-vaccine-efficacy-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-vaccine-efficacy" title="Permalink"></a></h2><pre><code class="language-julia hljs">efficacies = [0.3, 0.6, 0.9]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Vaccine Efficacy&quot;)
+
+# Add baseline
+plot!(p, tvec_b, prev_base, label=&quot;No vaccine&quot;, lw=2, color=:gray, ls=:dash)
+
+for eff in efficacies
+    vx = Vx(efficacy=eff)
+    delivery = RoutineDelivery(product=vx, prob=0.01, disease_name=:sir)
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        interventions=delivery,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;Efficacy=$eff&quot;, lw=2)
+end
+p</code></pre><p><img src="../06_interventions_files/figure-commonmark/cell-8-output-1.svg" alt/></p><h2 id="Varying-routine-delivery-probability"><a class="docs-heading-anchor" href="#Varying-routine-delivery-probability">Varying routine delivery probability</a><a id="Varying-routine-delivery-probability-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-routine-delivery-probability" title="Permalink"></a></h2><pre><code class="language-julia hljs">probs = [0.005, 0.01, 0.02]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Daily Vaccination Probability&quot;)
+plot!(p, tvec_b, prev_base, label=&quot;No vaccine&quot;, lw=2, color=:gray, ls=:dash)
+
+for pr in probs
+    vx = Vx(efficacy=0.9)
+    delivery = RoutineDelivery(product=vx, prob=pr, disease_name=:sir)
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        interventions=delivery,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;prob=$pr&quot;, lw=2)
+end
+p</code></pre><p><img src="../06_interventions_files/figure-commonmark/cell-9-output-1.svg" alt/></p><h2 id="Combining-routine-and-campaign-delivery"><a class="docs-heading-anchor" href="#Combining-routine-and-campaign-delivery">Combining routine and campaign delivery</a><a id="Combining-routine-and-campaign-delivery-1"></a><a class="docs-heading-anchor-permalink" href="#Combining-routine-and-campaign-delivery" title="Permalink"></a></h2><p>Multiple interventions can be used together.</p><pre><code class="language-julia hljs">vx = Vx(efficacy=0.9)
+combined = [
+    RoutineDelivery(product=vx, prob=0.005, disease_name=:sir),
+    CampaignDelivery(product=vx, coverage=0.3, years=[50.0], disease_name=:sir),
+]
+
+sim_combined = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    interventions = combined,
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_combined)
+
+prev_combined = get_result(sim_combined, :sir, :prevalence)
+tvec_cb = 0:length(prev_combined)-1
+
+plot(tvec_b, prev_base, label=&quot;No intervention&quot;, lw=2, color=:red, ls=:dash)
+plot!(tvec_cb, prev_combined, label=&quot;Routine + Campaign&quot;, lw=2, color=:purple)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Combined Vaccination Strategy&quot;)</code></pre><p><img src="../06_interventions_files/figure-commonmark/cell-10-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li><strong><code>Vx(efficacy=...)</code></strong>: Defines a vaccine product with a given efficacy</li><li><strong><code>RoutineDelivery</code></strong>: Continuous vaccination at a daily probability</li><li><strong><code>CampaignDelivery</code></strong>: Mass vaccination at specified time points</li><li>Multiple interventions can be combined in a single simulation</li><li>Higher efficacy and higher coverage both reduce peak prevalence</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../05_networks/">« Contact networks</a><a class="docs-footer-nextpage" href="../07_connectors/">Connectors »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

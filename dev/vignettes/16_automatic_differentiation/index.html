@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Automatic differentiation · Starsim.jl</title><meta name="title" content="Automatic differentiation · Starsim.jl"/><meta property="og:title" content="Automatic differentiation · Starsim.jl"/><meta property="twitter:title" content="Automatic differentiation · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li class="is-active"><a class="tocitem" href>Automatic differentiation</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Setup"><span>Setup</span></a></li><li><a class="tocitem" href="#Basic-sensitivity-analysis"><span>Basic sensitivity analysis</span></a></li><li><a class="tocitem" href="#Sensitivity-timeseries"><span>Sensitivity timeseries</span></a></li><li><a class="tocitem" href="#Parameter-sweep-with-sensitivity"><span>Parameter sweep with sensitivity</span></a></li><li><a class="tocitem" href="#Gradient-based-calibration"><span>Gradient-based calibration</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Automatic differentiation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Automatic differentiation</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Automatic-Differentiation-for-Sensitivity-Analysis"><a class="docs-heading-anchor" href="#Automatic-Differentiation-for-Sensitivity-Analysis">Automatic Differentiation for Sensitivity Analysis</a><a id="Automatic-Differentiation-for-Sensitivity-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Automatic-Differentiation-for-Sensitivity-Analysis" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#setup">Setup</a></li><li><a href="#basic-sensitivity-analysis">Basic sensitivity analysis</a></li><li><a href="#sensitivity-timeseries">Sensitivity timeseries</a></li><li><a href="#parameter-sweep-with-sensitivity">Parameter sweep with sensitivity</a></li><li><a href="#gradient-based-calibration">Gradient-based calibration</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>One advantage of implementing agent-based models in Julia is access to the automatic differentiation (AD) ecosystem. This vignette demonstrates how to use the <code>ForwardDiff.jl</code> extension of Starsim.jl to compute parameter sensitivities — how changes in model parameters affect disease outcomes.</p><p>For stochastic agent-based models, true AD through the simulation loop is challenging due to discrete branching. Starsim.jl uses <strong>central finite differences with common random numbers (CRN)</strong> — the same random seed ensures that the only variation between perturbed runs comes from the parameter change, not stochastic noise. This gives clean, interpretable sensitivity estimates.</p><h2 id="Setup"><a class="docs-heading-anchor" href="#Setup">Setup</a><a id="Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Setup" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Starsim
+using ForwardDiff
+using Plots</code></pre><h2 id="Basic-sensitivity-analysis"><a class="docs-heading-anchor" href="#Basic-sensitivity-analysis">Basic sensitivity analysis</a><a id="Basic-sensitivity-analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-sensitivity-analysis" title="Permalink"></a></h2><p>Let’s compute how the peak prevalence of an SIR epidemic changes with the transmission rate <code>beta</code>.</p><pre><code class="language-julia hljs">n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim = Sim(
+    n_agents = 1000,
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
+    rand_seed = 42,
+)
+init!(sim)
+run!(sim; verbose=0)
+
+# Compute ∂(max prevalence)/∂(beta)
+dsdb = sensitivity(sim, :beta;
+    module_name = :sir,
+    result = :prevalence,
+    summary = maximum,
+)
+println(&quot;∂(max prevalence)/∂(beta) = $(round(dsdb, digits=2))&quot;)</code></pre><pre><code class="nohighlight hljs">∂(max prevalence)/∂(beta) = 1.0</code></pre><p>A positive value means increasing beta increases peak prevalence, as expected.</p><h2 id="Sensitivity-timeseries"><a class="docs-heading-anchor" href="#Sensitivity-timeseries">Sensitivity timeseries</a><a id="Sensitivity-timeseries-1"></a><a class="docs-heading-anchor-permalink" href="#Sensitivity-timeseries" title="Permalink"></a></h2><p>We can also compute how the entire prevalence curve shifts when beta changes:</p><pre><code class="language-julia hljs">ts = sensitivity_timeseries(sim, :beta;
+    module_name = :sir,
+    result = :prevalence,
+)
+
+prev = module_results(sim.diseases[:sir])[:prevalence].values
+
+p = plot(layout=(2,1), size=(700,500))
+plot!(p[1], prev, label=&quot;Prevalence&quot;, ylabel=&quot;Prevalence&quot;, lw=2)
+plot!(p[2], ts, label=&quot;∂prev/∂beta&quot;, ylabel=&quot;Sensitivity&quot;,
+      xlabel=&quot;Time step&quot;, lw=2, color=:red)
+p</code></pre><p><img src="../16_automatic_differentiation_files/figure-commonmark/cell-4-output-1.svg" alt/></p><p>The sensitivity timeseries shows when the epidemic is most responsive to changes in beta — typically during the exponential growth phase.</p><h2 id="Parameter-sweep-with-sensitivity"><a class="docs-heading-anchor" href="#Parameter-sweep-with-sensitivity">Parameter sweep with sensitivity</a><a id="Parameter-sweep-with-sensitivity-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-sweep-with-sensitivity" title="Permalink"></a></h2><p>Let’s sweep over beta values and compute the sensitivity at each point:</p><pre><code class="language-julia hljs">betas = 0.005:0.005:0.10
+max_prevs = Float64[]
+sensitivities = Float64[]
+
+for b in betas
+    s = Sim(
+        n_agents = 1000,
+        diseases = SIR(beta=b, dur_inf=4.0, init_prev=0.01),
+        networks = RandomNet(n_contacts=n_contacts),
+        start = 0.0, stop = 40.0, dt = 1.0,
+        rand_seed = 42,
+    )
+    init!(s)
+    run!(s; verbose=0)
+
+    push!(max_prevs, maximum(module_results(s.diseases[:sir])[:prevalence].values))
+
+    ds = sensitivity(s, :beta;
+        module_name = :sir, result = :prevalence, summary = maximum,
+    )
+    push!(sensitivities, ds)
+end
+
+p = plot(layout=(2,1), size=(700,500))
+plot!(p[1], collect(betas), max_prevs, label=&quot;Max prevalence&quot;,
+      xlabel=&quot;beta&quot;, ylabel=&quot;Max prevalence&quot;, lw=2, marker=:o, ms=3)
+plot!(p[2], collect(betas), sensitivities, label=&quot;∂(max prev)/∂(beta)&quot;,
+      xlabel=&quot;beta&quot;, ylabel=&quot;Sensitivity&quot;, lw=2, marker=:o, ms=3, color=:red)
+p</code></pre><p><img src="../16_automatic_differentiation_files/figure-commonmark/cell-5-output-1.svg" alt/></p><p>The sensitivity is highest at intermediate beta values where the epidemic is most responsive to small parameter changes. At very low beta (no epidemic) or very high beta (everyone infected quickly), the sensitivity drops.</p><h2 id="Gradient-based-calibration"><a class="docs-heading-anchor" href="#Gradient-based-calibration">Gradient-based calibration</a><a id="Gradient-based-calibration-1"></a><a class="docs-heading-anchor-permalink" href="#Gradient-based-calibration" title="Permalink"></a></h2><p>The ForwardDiff extension also provides <code>gradient_objective</code> for use in calibration. This computes both the objective value and its gradient, enabling gradient-based optimization methods:</p><pre><code class="language-julia hljs"># Create synthetic target data
+target_sim = Sim(
+    n_agents = 1000,
+    diseases = SIR(beta=0.08, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
+    rand_seed = 1,
+)
+init!(target_sim)
+run!(target_sim; verbose=0)
+target_prev = maximum(module_results(target_sim.diseases[:sir])[:prevalence].values)
+println(&quot;Target max prevalence: $(round(target_prev, digits=4))&quot;)
+
+# Set up calibration
+base_sim = Sim(
+    n_agents = 1000,
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0, stop = 40.0, dt = 1.0,
+    rand_seed = 42,
+)
+init!(base_sim)
+
+calib = Calibration(
+    sim = base_sim,
+    calib_pars = [CalibPar(:beta, low=0.01, high=0.15, initial=0.05, module_name=:sir, par_name=:beta)],
+    components = [CalibComponent(:sir, target_data=[target_prev], sim_result=:prevalence, disease_name=:sir)],
+    n_trials = 50,
+)
+
+# Compute gradient at initial point
+x0 = [0.05]
+obj, grad = gradient_objective(calib, x0)
+println(&quot;Objective at beta=0.05: $(round(obj, digits=6))&quot;)
+println(&quot;Gradient: $(round.(grad, digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Target max prevalence: 0.283
+Objective at beta=0.05: 0.073441
+Gradient: [0.0]</code></pre><p>The gradient tells us which direction to move the parameter to reduce the objective, enabling faster convergence than derivative-free methods.</p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><table><tr><th style="text-align: right">Feature</th><th style="text-align: right">Description</th></tr><tr><td style="text-align: right"><code>sensitivity(sim, :par)</code></td><td style="text-align: right">Scalar sensitivity via CRN finite differences</td></tr><tr><td style="text-align: right"><code>sensitivity_timeseries(sim, :par)</code></td><td style="text-align: right">Per-timestep sensitivity curve</td></tr><tr><td style="text-align: right"><code>gradient_objective(calib, x)</code></td><td style="text-align: right">Objective + gradient for calibration</td></tr></table><p>Key design choices: - <strong>CRN-based finite differences</strong>: Same seed for +h and -h runs eliminates stochastic noise - <strong>Default h=1e-3</strong>: Appropriate for stochastic ABMs (much larger than typical AD perturbations) - <strong>Extension pattern</strong>: Only loaded when <code>using ForwardDiff</code> — no extra dependencies for users who don’t need AD</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../15_composition/">« Composition (Catlab)</a><a class="docs-footer-nextpage" href="../17_gpu/">GPU acceleration »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Composition (Catlab) · Starsim.jl</title><meta name="title" content="Composition (Catlab) · Starsim.jl"/><meta property="og:title" content="Composition (Catlab) · Starsim.jl"/><meta property="twitter:title" content="Composition (Catlab) · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li class="is-active"><a class="tocitem" href>Composition (Catlab)</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Setup"><span>Setup</span></a></li><li><a class="tocitem" href="#Epidemiological-networks-(EpiNet)"><span>Epidemiological networks (EpiNet)</span></a></li><li><a class="tocitem" href="#EpiNet-to-simulation"><span>EpiNet to simulation</span></a></li><li><a class="tocitem" href="#Module-composition-with-EpiSharers"><span>Module composition with EpiSharers</span></a></li><li><a class="tocitem" href="#Undirected-wiring-diagrams"><span>Undirected wiring diagrams</span></a></li><li><a class="tocitem" href="#Composing-a-simulation"><span>Composing a simulation</span></a></li><li><a class="tocitem" href="#Verification:-composed-matches-manual"><span>Verification: composed matches manual</span></a></li><li><a class="tocitem" href="#Multi-module-composition"><span>Multi-module composition</span></a></li><li><a class="tocitem" href="#Open-epidemiological-networks"><span>Open epidemiological networks</span></a></li><li><a class="tocitem" href="#Why-category-theory?"><span>Why category theory?</span></a></li></ul></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Composition (Catlab)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Composition (Catlab)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Category-Theory-Composition-with-Catlab.jl"><a class="docs-heading-anchor" href="#Category-Theory-Composition-with-Catlab.jl">Category-Theory Composition with Catlab.jl</a><a id="Category-Theory-Composition-with-Catlab.jl-1"></a><a class="docs-heading-anchor-permalink" href="#Category-Theory-Composition-with-Catlab.jl" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#setup">Setup</a></li><li><a href="#epidemiological-networks-epinet">Epidemiological networks (EpiNet)</a></li><li><a href="#epinet-to-simulation">EpiNet to simulation</a></li><li><a href="#module-composition-with-episharers">Module composition with EpiSharers</a></li><li><a href="#undirected-wiring-diagrams">Undirected wiring diagrams</a></li><li><a href="#composing-a-simulation">Composing a simulation</a></li><li><a href="#verification-composed-matches-manual">Verification: composed matches manual</a></li><li><a href="#multi-module-composition">Multi-module composition</a></li><li><a href="#open-epidemiological-networks">Open epidemiological networks</a></li><li><a href="#why-category-theory">Why category theory?</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>One challenge in agent-based disease modeling is composing multiple modules (diseases, networks, demographics) into a coherent simulation without introducing subtle bugs. Starsim.jl provides a <strong>category-theory-based composition</strong> framework via the <code>Catlab.jl</code> extension, allowing you to formally specify how modules share state and then automatically assemble a simulation.</p><p>This approach uses <strong>undirected wiring diagrams</strong> (UWDs) from applied category theory: each module is a “box” with ports representing shared agent states (e.g., <code>:alive</code>, <code>:susceptible</code>), and junctions wire compatible ports together.</p><h2 id="Setup"><a class="docs-heading-anchor" href="#Setup">Setup</a><a id="Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Setup" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Starsim
+using Catlab</code></pre><h2 id="Epidemiological-networks-(EpiNet)"><a class="docs-heading-anchor" href="#Epidemiological-networks-(EpiNet)">Epidemiological networks (EpiNet)</a><a id="Epidemiological-networks-(EpiNet)-1"></a><a class="docs-heading-anchor-permalink" href="#Epidemiological-networks-(EpiNet)" title="Permalink"></a></h2><p>An <code>EpiNet</code> is an ACSet (attributed C-set) that formally represents the transition structure of a disease model. Each state (S, I, R, etc.) is an object, and each transition (infection, recovery) is a morphism from source to target state.</p><pre><code class="language-julia hljs"># Define an SIR transition structure
+sir_net = EpiNet(
+    [:S, :I, :R],
+    [:infection =&gt; (:S =&gt; :I), :recovery =&gt; (:I =&gt; :R)]
+)
+println(sir_net)</code></pre><pre><code class="nohighlight hljs">StarsimCatlabExt.EpiNetACSet{Symbol}:
+  S = 1:3
+  T = 1:2
+  Name = 1:0
+  src : T → S = [1, 2]
+  tgt : T → S = [2, 3]
+  sname : S → Name = [:S, :I, :R]
+  tname : T → Name = [:infection, :recovery]</code></pre><p>This is equivalent to the textbook SIR compartmental diagram: <strong>S → I → R</strong>, where infection moves agents from susceptible to infected, and recovery moves them from infected to recovered.</p><pre><code class="language-julia hljs"># SIS has recovery looping back to susceptible
+sis_net = EpiNet(
+    [:S, :I],
+    [:infection =&gt; (:S =&gt; :I), :recovery =&gt; (:I =&gt; :S)]
+)
+println(sis_net)</code></pre><pre><code class="nohighlight hljs">StarsimCatlabExt.EpiNetACSet{Symbol}:
+  S = 1:2
+  T = 1:2
+  Name = 1:0
+  src : T → S = [1, 2]
+  tgt : T → S = [2, 1]
+  sname : S → Name = [:S, :I]
+  tname : T → Name = [:infection, :recovery]</code></pre><pre><code class="language-julia hljs"># SEIR adds an exposed compartment
+seir_net = EpiNet(
+    [:S, :E, :I, :R],
+    [:exposure =&gt; (:S =&gt; :E), :progression =&gt; (:E =&gt; :I), :recovery =&gt; (:I =&gt; :R)]
+)
+println(seir_net)</code></pre><pre><code class="nohighlight hljs">StarsimCatlabExt.EpiNetACSet{Symbol}:
+  S = 1:4
+  T = 1:3
+  Name = 1:0
+  src : T → S = [1, 2, 3]
+  tgt : T → S = [2, 3, 4]
+  sname : S → Name = [:S, :E, :I, :R]
+  tname : T → Name = [:exposure, :progression, :recovery]</code></pre><h2 id="EpiNet-to-simulation"><a class="docs-heading-anchor" href="#EpiNet-to-simulation">EpiNet to simulation</a><a id="EpiNet-to-simulation-1"></a><a class="docs-heading-anchor-permalink" href="#EpiNet-to-simulation" title="Permalink"></a></h2><p>An <code>EpiNet</code> can be directly converted to a Starsim simulation via <code>to_sim()</code>, which auto-detects the disease pattern:</p><pre><code class="language-julia hljs">sim = to_sim(sir_net;
+    n_agents = 1000,
+    beta = 0.5 / 10,
+    dur_inf = 4.0,
+    networks = RandomNet(n_contacts=10),
+    start = 0.0,
+    stop = 40.0,
+    rand_seed = 42,
+)
+run!(sim; verbose=0)
+prev = get_result(sim, :sir, :prevalence)
+println(&quot;Peak prevalence from EpiNet-based sim: $(round(maximum(prev), digits=3))&quot;)</code></pre><pre><code class="nohighlight hljs">Peak prevalence from EpiNet-based sim: 0.112</code></pre><h2 id="Module-composition-with-EpiSharers"><a class="docs-heading-anchor" href="#Module-composition-with-EpiSharers">Module composition with EpiSharers</a><a id="Module-composition-with-EpiSharers-1"></a><a class="docs-heading-anchor-permalink" href="#Module-composition-with-EpiSharers" title="Permalink"></a></h2><p>For more complex models, <code>EpiSharer</code> wraps a Starsim module and declares which agent states it shares as “ports”. When two sharers declare the same port (e.g., <code>:alive</code>), composing them ensures they operate on the same population.</p><pre><code class="language-julia hljs"># Create modules
+n_contacts = 10
+beta = 0.5 / n_contacts
+sir = SIR(beta=beta, dur_inf=4.0, init_prev=0.01)
+net = RandomNet(n_contacts=n_contacts)
+
+# Wrap as sharers
+disease_sharer = EpiSharer(:sir_disease, sir)
+network_sharer = EpiSharer(:contact_net, net)
+
+println(disease_sharer)
+println(network_sharer)</code></pre><pre><code class="nohighlight hljs">EpiSharer(:sir_disease, 1 module, ports=[:alive, :susceptible], category=:disease)
+EpiSharer(:contact_net, 1 module, ports=[:alive], category=:network)</code></pre><p>Disease sharers automatically expose <code>:alive</code> and <code>:susceptible</code> ports. Network sharers expose <code>:alive</code>.</p><h2 id="Undirected-wiring-diagrams"><a class="docs-heading-anchor" href="#Undirected-wiring-diagrams">Undirected wiring diagrams</a><a id="Undirected-wiring-diagrams-1"></a><a class="docs-heading-anchor-permalink" href="#Undirected-wiring-diagrams" title="Permalink"></a></h2><p>The wiring diagram specifies how sharers connect via shared junctions:</p><pre><code class="language-julia hljs"># Build a UWD connecting our sharers
+uwd = epi_uwd([disease_sharer, network_sharer])
+println(&quot;Boxes: &quot;, nparts(uwd, :Box))
+println(&quot;Junctions: &quot;, nparts(uwd, :Junction))</code></pre><pre><code class="nohighlight hljs">Boxes: 2
+Junctions: 2</code></pre><p>You can also build UWDs by creating multiple sharers:</p><pre><code class="language-julia hljs"># Create sharers with specific configurations
+disease_sharer_2 = EpiSharer(:sir_disease_2, SIR(beta=beta, dur_inf=4.0))
+network_sharer_2 = EpiSharer(:contact_net_2, RandomNet(n_contacts=n_contacts))
+
+# Build UWD from sharers
+uwd_manual = epi_uwd([disease_sharer_2, network_sharer_2])
+println(&quot;Manual UWD boxes: &quot;, nparts(uwd_manual, :Box))</code></pre><pre><code class="nohighlight hljs">Manual UWD boxes: 2</code></pre><h2 id="Composing-a-simulation"><a class="docs-heading-anchor" href="#Composing-a-simulation">Composing a simulation</a><a id="Composing-a-simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Composing-a-simulation" title="Permalink"></a></h2><p><code>compose_epi</code> takes a vector of sharers and assembles them into a complete simulation:</p><pre><code class="language-julia hljs">sim_composed = compose_epi(
+    [disease_sharer, network_sharer];
+    n_agents = 1000,
+    start = 0.0,
+    stop = 40.0,
+    rand_seed = 42,
+)
+run!(sim_composed; verbose=0)
+prev_composed = get_result(sim_composed, :sir, :prevalence)
+println(&quot;Peak prevalence (composed): $(round(maximum(prev_composed), digits=3))&quot;)</code></pre><pre><code class="nohighlight hljs">Peak prevalence (composed): 0.112</code></pre><h2 id="Verification:-composed-matches-manual"><a class="docs-heading-anchor" href="#Verification:-composed-matches-manual">Verification: composed matches manual</a><a id="Verification:-composed-matches-manual-1"></a><a class="docs-heading-anchor-permalink" href="#Verification:-composed-matches-manual" title="Permalink"></a></h2><p>The key guarantee of categorical composition is that the composed model produces identical results to a manually assembled simulation:</p><pre><code class="language-julia hljs"># Manual assembly
+sim_manual = Sim(
+    n_agents = 1000,
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    networks = RandomNet(n_contacts=n_contacts),
+    start = 0.0,
+    stop = 40.0,
+    rand_seed = 42,
+)
+run!(sim_manual; verbose=0)
+prev_manual = get_result(sim_manual, :sir, :prevalence)
+
+max_diff = maximum(abs.(prev_composed .- prev_manual))
+println(&quot;Maximum difference: $max_diff&quot;)
+println(&quot;Match: $(max_diff &lt; 1e-10)&quot;)</code></pre><pre><code class="nohighlight hljs">Maximum difference: 0.0
+Match: true</code></pre><p>The composed and manual simulations are <strong>identical</strong> — same disease dynamics, same random number streams, same results. This is the functoriality guarantee: composition preserves behavior.</p><h2 id="Multi-module-composition"><a class="docs-heading-anchor" href="#Multi-module-composition">Multi-module composition</a><a id="Multi-module-composition-1"></a><a class="docs-heading-anchor-permalink" href="#Multi-module-composition" title="Permalink"></a></h2><p>Composition becomes most useful when assembling complex models with many interacting components:</p><pre><code class="language-julia hljs"># Three-component model: disease + network + demographics
+sir2 = SIR(beta=beta, dur_inf=4.0, init_prev=0.01)
+net2 = RandomNet(n_contacts=n_contacts)
+births = Births(birth_rate=20.0)  # per 1000 per year
+deaths = Deaths(death_rate=15.0)
+
+disease_s = EpiSharer(:disease, sir2)
+network_s = EpiSharer(:network, net2)
+demog_s = EpiSharer(:demographics, [births, deaths])
+
+sim3 = compose_epi(
+    [disease_s, network_s, demog_s];
+    n_agents = 1000,
+    start = 0.0,
+    stop = 40.0,
+    rand_seed = 42,
+)
+run!(sim3; verbose=0)
+println(&quot;Final population: &quot;, get_result(sim3, :n_alive)[end])</code></pre><pre><code class="nohighlight hljs">Final population: 1221.0</code></pre><h2 id="Open-epidemiological-networks"><a class="docs-heading-anchor" href="#Open-epidemiological-networks">Open epidemiological networks</a><a id="Open-epidemiological-networks-1"></a><a class="docs-heading-anchor-permalink" href="#Open-epidemiological-networks" title="Permalink"></a></h2><p>For hierarchical composition, <code>OpenEpiNet</code> creates structured cospans that expose specific disease states as ports for gluing:</p><pre><code class="language-julia hljs">net_data = EpiNet(
+    [:S, :I, :R],
+    [:infection =&gt; (:S =&gt; :I), :recovery =&gt; (:I =&gt; :R)]
+)
+# Expose S (index 1) as an external port
+open_net = OpenEpiNet(net_data, [[1]])
+println(&quot;OpenEpiNet legs: &quot;, length(open_net.legs))</code></pre><pre><code class="nohighlight hljs">OpenEpiNet legs: 1</code></pre><p>This enables compositional design where disease models can be connected at shared states — for example, two diseases sharing a susceptible population through a connector.</p><h2 id="Why-category-theory?"><a class="docs-heading-anchor" href="#Why-category-theory?">Why category theory?</a><a id="Why-category-theory?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-category-theory?" title="Permalink"></a></h2><p>The categorical approach provides:</p><ol><li><strong>Formal correctness</strong>: Shared states are identified at composition  time — no silent mismatches or forgotten connections.</li><li><strong>Modularity</strong>: Each component is self-contained with explicit  interfaces.</li><li><strong>Compositionality</strong>: Complex models are built by composing simpler  ones, with guarantees that the composition preserves each  component’s behavior.</li><li><strong>Visual reasoning</strong>: Wiring diagrams give an intuitive graphical  representation of model structure.</li></ol><p>This follows the same philosophy as <a href="https://www.algebraicjulia.org/">AlgebraicJulia</a> and the applied category theory approach to scientific modeling.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../14_malaria/">« Malaria (metapopulation)</a><a class="docs-footer-nextpage" href="../16_automatic_differentiation/">Automatic differentiation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

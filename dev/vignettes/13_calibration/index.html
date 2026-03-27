@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Calibration · Starsim.jl</title><meta name="title" content="Calibration · Starsim.jl"/><meta property="og:title" content="Calibration · Starsim.jl"/><meta property="twitter:title" content="Calibration · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li class="is-active"><a class="tocitem" href>Calibration</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Generate-synthetic-target-data"><span>Generate synthetic target data</span></a></li><li><a class="tocitem" href="#Manual-parameter-sweep"><span>Manual parameter sweep</span></a></li><li><a class="tocitem" href="#Loss-landscape"><span>Loss landscape</span></a></li><li><a class="tocitem" href="#Automated-calibration"><span>Automated calibration</span></a></li><li><a class="tocitem" href="#Best-fit-visualization"><span>Best fit visualization</span></a></li><li><a class="tocitem" href="#Optimization-trace"><span>Optimization trace</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Calibration</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Calibration</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Calibration:-Fitting-Models-to-Data"><a class="docs-heading-anchor" href="#Calibration:-Fitting-Models-to-Data">Calibration: Fitting Models to Data</a><a id="Calibration:-Fitting-Models-to-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Calibration:-Fitting-Models-to-Data" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#generate-synthetic-target-data">Generate synthetic target data</a></li><li><a href="#manual-parameter-sweep">Manual parameter sweep</a></li><li><a href="#loss-landscape">Loss landscape</a></li><li><a href="#automated-calibration">Automated calibration</a></li><li><a href="#best-fit-visualization">Best fit visualization</a></li><li><a href="#optimization-trace">Optimization trace</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Model calibration adjusts simulation parameters to match observed data. Starsim.jl provides a <code>Calibration</code> framework with:</p><ul><li><code>CalibPar</code> — parameter specifications with bounds</li><li><code>CalibComponent</code> — likelihood/loss components linking sim results to data</li><li>Random search optimization (with AD-gradient pathway planned)</li></ul><h2 id="Generate-synthetic-target-data"><a class="docs-heading-anchor" href="#Generate-synthetic-target-data">Generate synthetic target data</a><a id="Generate-synthetic-target-data-1"></a><a class="docs-heading-anchor-permalink" href="#Generate-synthetic-target-data" title="Permalink"></a></h2><p>First, we generate “truth” by running a simulation with known parameters.</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+n_contacts = 10
+beta = 0.5 / n_contacts  # = 0.05
+
+true_sim = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(true_sim)
+
+target_prev = get_result(true_sim, :sir, :prevalence)
+println(&quot;True beta: 0.05&quot;)
+println(&quot;Peak prevalence: $(round(maximum(target_prev), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">True beta: 0.05
+Peak prevalence: 0.112</code></pre><h2 id="Manual-parameter-sweep"><a class="docs-heading-anchor" href="#Manual-parameter-sweep">Manual parameter sweep</a><a id="Manual-parameter-sweep-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-parameter-sweep" title="Permalink"></a></h2><p>Before automated calibration, let’s see how different beta values compare.</p><pre><code class="language-julia hljs">betas = [0.01, 0.02, 0.03, 0.05, 0.07, 0.08, 0.10]
+losses = Float64[]
+tvec = 0:length(target_prev)-1
+
+p = plot(tvec, target_prev, lw=3, color=:black, ls=:dash, label=&quot;Target&quot;,
+         xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Parameter Sweep&quot;)
+
+for beta in betas
+    sim = Sim(
+        n_agents = 1_000,
+        networks = RandomNet(n_contacts=n_contacts),
+        diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    n = min(length(prev), length(target_prev))
+    mse = sum((prev[1:n] .- target_prev[1:n]).^2) / n
+    push!(losses, mse)
+    plot!(p, tvec[1:n], prev[1:n], alpha=0.6, label=&quot;β=$beta&quot;)
+end
+p</code></pre><p><img src="../13_calibration_files/figure-commonmark/cell-3-output-1.svg" alt/></p><h2 id="Loss-landscape"><a class="docs-heading-anchor" href="#Loss-landscape">Loss landscape</a><a id="Loss-landscape-1"></a><a class="docs-heading-anchor-permalink" href="#Loss-landscape" title="Permalink"></a></h2><pre><code class="language-julia hljs">plot(betas, losses, marker=:circle, lw=2, color=:steelblue, markersize=8,
+     xlabel=&quot;Beta&quot;, ylabel=&quot;MSE Loss&quot;, title=&quot;Loss vs Beta&quot;)
+vline!([0.05], color=:red, ls=:dash, label=&quot;True beta&quot;)</code></pre><p><img src="../13_calibration_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Automated-calibration"><a class="docs-heading-anchor" href="#Automated-calibration">Automated calibration</a><a id="Automated-calibration-1"></a><a class="docs-heading-anchor-permalink" href="#Automated-calibration" title="Permalink"></a></h2><pre><code class="language-julia hljs">calib = Calibration(
+    sim = Sim(
+        n_agents = 1_000,
+        networks = RandomNet(n_contacts=n_contacts),
+        diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
+    ),
+    calib_pars = [
+        CalibPar(:beta; low=0.01, high=0.15, module_name=:sir),
+    ],
+    components = [
+        CalibComponent(:prev;
+            target_data = Float64.(target_prev),
+            sim_result = :prevalence,
+            disease_name = :sir,
+        ),
+    ],
+    n_trials = 200,
+)
+
+run!(calib; verbose=1)</code></pre><pre><code class="nohighlight hljs">Starting calibration (200 trials, 1 parameters)
+Calibration complete. Best objective: 0.000245
+Best parameters: Dict(:beta =&gt; 0.046577743097509505)
+
+Calibration(1 pars, 1 components, 200 trials, complete (obj=0.0002))</code></pre><h2 id="Best-fit-visualization"><a class="docs-heading-anchor" href="#Best-fit-visualization">Best fit visualization</a><a id="Best-fit-visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Best-fit-visualization" title="Permalink"></a></h2><pre><code class="language-julia hljs">best_sim = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=calib.best_pars[:beta], dur_inf=4.0, init_prev=0.01),
+    dt = 1.0, stop = 40.0, rand_seed = 42, verbose = 0,
+)
+run!(best_sim)
+
+best_prev = get_result(best_sim, :sir, :prevalence)
+n = min(length(best_prev), length(target_prev))
+
+plot(0:n-1, target_prev[1:n], lw=2, color=:black, ls=:dash, label=&quot;Target data&quot;)
+plot!(0:n-1, best_prev[1:n], lw=2, color=:red,
+      label=&quot;Best fit (β=$(round(calib.best_pars[:beta], digits=4)))&quot;)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Calibration Result&quot;)</code></pre><p><img src="../13_calibration_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h2 id="Optimization-trace"><a class="docs-heading-anchor" href="#Optimization-trace">Optimization trace</a><a id="Optimization-trace-1"></a><a class="docs-heading-anchor-permalink" href="#Optimization-trace" title="Permalink"></a></h2><pre><code class="language-julia hljs">trial_objs = [obj for (_, obj) in calib.trial_history]
+best_so_far = accumulate(min, trial_objs)
+
+plot(1:length(trial_objs), trial_objs, alpha=0.3, label=&quot;Trial objective&quot;,
+     xlabel=&quot;Trial&quot;, ylabel=&quot;MSE Loss&quot;, title=&quot;Calibration Trace&quot;)
+plot!(1:length(best_so_far), best_so_far, lw=2, color=:red, label=&quot;Best so far&quot;)</code></pre><p><img src="../13_calibration_files/figure-commonmark/cell-7-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>Calibration fits model parameters to observed data by minimizing a loss function</li><li><code>CalibPar</code> specifies parameter bounds; <code>CalibComponent</code> links simulation results to target data</li><li>Random search explores the parameter space efficiently for low-dimensional problems</li><li>The best-fit beta closely recovers the true value used to generate the target data</li><li>Future: AD-gradient calibration via <code>ForwardDiff.jl</code> for higher-dimensional parameter spaces</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../12_multisim/">« MultiSim</a><a class="docs-footer-nextpage" href="../14_malaria/">Malaria (metapopulation) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

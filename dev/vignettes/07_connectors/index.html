@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Connectors · Starsim.jl</title><meta name="title" content="Connectors · Starsim.jl"/><meta property="og:title" content="Connectors · Starsim.jl"/><meta property="twitter:title" content="Connectors · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li class="is-active"><a class="tocitem" href>Connectors</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Baseline:-constant-beta"><span>Baseline: constant beta</span></a></li><li><a class="tocitem" href="#Seasonality-connector"><span>Seasonality connector</span></a></li><li><a class="tocitem" href="#Comparing-constant-vs-seasonal-transmission"><span>Comparing constant vs seasonal transmission</span></a></li><li><a class="tocitem" href="#Visualizing-the-beta-modulation"><span>Visualizing the beta modulation</span></a></li><li><a class="tocitem" href="#Varying-seasonality-amplitude"><span>Varying seasonality amplitude</span></a></li><li><a class="tocitem" href="#Varying-the-peak-day"><span>Varying the peak day</span></a></li><li><a class="tocitem" href="#Seasonality-with-SIS-dynamics"><span>Seasonality with SIS dynamics</span></a></li><li><a class="tocitem" href="#Multi-disease-simulation-with-connectors"><span>Multi-disease simulation with connectors</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../08_measles/">Measles (SEIR)</a></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Connectors</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Connectors</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Connectors"><a class="docs-heading-anchor" href="#Connectors">Connectors</a><a id="Connectors-1"></a><a class="docs-heading-anchor-permalink" href="#Connectors" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#baseline-constant-beta">Baseline: constant beta</a></li><li><a href="#seasonality-connector">Seasonality connector</a></li><li><a href="#comparing-constant-vs-seasonal-transmission">Comparing constant vs seasonal transmission</a></li><li><a href="#visualizing-the-beta-modulation">Visualizing the beta modulation</a></li><li><a href="#varying-seasonality-amplitude">Varying seasonality amplitude</a></li><li><a href="#varying-the-peak-day">Varying the peak day</a></li><li><a href="#seasonality-with-sis-dynamics">Seasonality with SIS dynamics</a></li><li><a href="#multi-disease-simulation-with-connectors">Multi-disease simulation with connectors</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p><strong>Connectors</strong> in Starsim.jl provide a way to modify disease dynamics based on external factors or cross-disease interactions. This vignette demonstrates the <code>Seasonality</code> connector, which modulates a disease’s transmission rate (<code>beta</code>) over time using a sinusoidal pattern, and shows how connectors work in multi-disease simulations.</p><h2 id="Baseline:-constant-beta"><a class="docs-heading-anchor" href="#Baseline:-constant-beta">Baseline: constant beta</a><a id="Baseline:-constant-beta-1"></a><a class="docs-heading-anchor-permalink" href="#Baseline:-constant-beta" title="Permalink"></a></h2><p>First, a standard SIR simulation with constant transmission for comparison.</p><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+n_contacts = 10
+beta = 0.5 / n_contacts
+
+sim_base = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_base)
+
+prev_base = get_result(sim_base, :sir, :prevalence)
+tvec_base = 0:length(prev_base)-1
+println(&quot;Constant beta peak prevalence: $(round(maximum(prev_base), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Constant beta peak prevalence: 0.112</code></pre><h2 id="Seasonality-connector"><a class="docs-heading-anchor" href="#Seasonality-connector">Seasonality connector</a><a id="Seasonality-connector-1"></a><a class="docs-heading-anchor-permalink" href="#Seasonality-connector" title="Permalink"></a></h2><p>The <code>Seasonality</code> connector modulates beta using the formula:</p><p class="math-container">\[\beta_{\text{eff}}(t) = \beta \times \left(1 + A \cos\!\left(\frac{2\pi(t - t_{\text{peak}})}{365}\right)\right)\]</p><p>where <span>$A$</span> is the <code>amplitude</code> (0–1) and <span>$t_{\text{peak}}$</span> is the <code>peak_day</code> (day of year with maximum transmission).</p><pre><code class="language-julia hljs">seasonal = Seasonality(disease_name=:sir, amplitude=0.5, peak_day=0)
+
+sim_seasonal = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+    connectors = seasonal,
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_seasonal)
+
+prev_seasonal = get_result(sim_seasonal, :sir, :prevalence)
+tvec_seasonal = 0:length(prev_seasonal)-1
+println(&quot;Seasonal beta peak prevalence: $(round(maximum(prev_seasonal), digits=4))&quot;)</code></pre><pre><code class="nohighlight hljs">Seasonal beta peak prevalence: 0.5</code></pre><h2 id="Comparing-constant-vs-seasonal-transmission"><a class="docs-heading-anchor" href="#Comparing-constant-vs-seasonal-transmission">Comparing constant vs seasonal transmission</a><a id="Comparing-constant-vs-seasonal-transmission-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-constant-vs-seasonal-transmission" title="Permalink"></a></h2><pre><code class="language-julia hljs">plot(tvec_base, prev_base, label=&quot;Constant β&quot;, lw=2, color=:blue, ls=:dash)
+plot!(tvec_seasonal, prev_seasonal, label=&quot;Seasonal β (A=0.5)&quot;, lw=2, color=:red)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Effect of Seasonal Transmission&quot;)</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-4-output-1.svg" alt/></p><h2 id="Visualizing-the-beta-modulation"><a class="docs-heading-anchor" href="#Visualizing-the-beta-modulation">Visualizing the beta modulation</a><a id="Visualizing-the-beta-modulation-1"></a><a class="docs-heading-anchor-permalink" href="#Visualizing-the-beta-modulation" title="Permalink"></a></h2><pre><code class="language-julia hljs">amplitude = 0.5
+peak_day = 0.0
+days = 0:1:(365*2)
+beta_base = 0.05
+beta_eff = beta_base .* (1.0 .+ amplitude .* cos.(2π .* (days .- peak_day) ./ 365))
+
+plot(days, beta_eff, lw=2, color=:orange, label=&quot;Effective β&quot;)
+hline!([beta_base], lw=1, ls=:dot, color=:gray, label=&quot;Mean β&quot;)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Transmission rate&quot;)
+title!(&quot;Seasonal Beta Modulation (A=$amplitude)&quot;)</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Varying-seasonality-amplitude"><a class="docs-heading-anchor" href="#Varying-seasonality-amplitude">Varying seasonality amplitude</a><a id="Varying-seasonality-amplitude-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-seasonality-amplitude" title="Permalink"></a></h2><pre><code class="language-julia hljs">amplitudes = [0.0, 0.3, 0.6, 0.9]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Seasonality Amplitude&quot;)
+
+for amp in amplitudes
+    conn = Seasonality(disease_name=:sir, amplitude=amp, peak_day=0.0)
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        connectors=conn,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;A=$amp&quot;, lw=2)
+end
+p</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-6-output-1.svg" alt/></p><h2 id="Varying-the-peak-day"><a class="docs-heading-anchor" href="#Varying-the-peak-day">Varying the peak day</a><a id="Varying-the-peak-day-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-the-peak-day" title="Permalink"></a></h2><pre><code class="language-julia hljs">peak_days = [0.0, 90.0, 180.0]
+p = plot(xlabel=&quot;Day&quot;, ylabel=&quot;Prevalence&quot;, title=&quot;Effect of Peak Day&quot;)
+
+for pd in peak_days
+    conn = Seasonality(disease_name=:sir, amplitude=0.5, peak_day=pd)
+    sim = Sim(
+        n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+        diseases=SIR(beta=beta, dur_inf=4.0, init_prev=0.01),
+        connectors=conn,
+        dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+    )
+    run!(sim)
+    prev = get_result(sim, :sir, :prevalence)
+    plot!(p, 0:length(prev)-1, prev, label=&quot;peak_day=$pd&quot;, lw=2)
+end
+p</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-7-output-1.svg" alt/></p><h2 id="Seasonality-with-SIS-dynamics"><a class="docs-heading-anchor" href="#Seasonality-with-SIS-dynamics">Seasonality with SIS dynamics</a><a id="Seasonality-with-SIS-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Seasonality-with-SIS-dynamics" title="Permalink"></a></h2><p>Seasonality is especially visible with SIS models, where endemic transmission produces recurring waves.</p><pre><code class="language-julia hljs">sim_sis_base = Sim(
+    n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
+    dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+)
+run!(sim_sis_base)
+
+sim_sis_seasonal = Sim(
+    n_agents=1_000, networks=RandomNet(n_contacts=n_contacts),
+    diseases=SIS(beta=beta, dur_inf=4.0, init_prev=0.01),
+    connectors=Seasonality(disease_name=:sis, amplitude=0.5, peak_day=0.0),
+    dt=1.0, stop=40.0, rand_seed=42, verbose=0,
+)
+run!(sim_sis_seasonal)
+
+prev_sis_b = get_result(sim_sis_base, :sis, :prevalence)
+prev_sis_s = get_result(sim_sis_seasonal, :sis, :prevalence)
+
+plot(0:length(prev_sis_b)-1, prev_sis_b, label=&quot;Constant β&quot;, lw=2, color=:blue, ls=:dash)
+plot!(0:length(prev_sis_s)-1, prev_sis_s, label=&quot;Seasonal β&quot;, lw=2, color=:red)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;SIS with Seasonal Transmission (3 years)&quot;)</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-8-output-1.svg" alt/></p><h2 id="Multi-disease-simulation-with-connectors"><a class="docs-heading-anchor" href="#Multi-disease-simulation-with-connectors">Multi-disease simulation with connectors</a><a id="Multi-disease-simulation-with-connectors-1"></a><a class="docs-heading-anchor-permalink" href="#Multi-disease-simulation-with-connectors" title="Permalink"></a></h2><p>Connectors are applied per-disease. Here we run two diseases with seasonality on one but not the other.</p><pre><code class="language-julia hljs">sim_multi = Sim(
+    n_agents = 1_000,
+    networks = RandomNet(n_contacts=n_contacts),
+    diseases = [
+        SIS(name=:flu, beta=0.05, dur_inf=3.0, init_prev=0.01),
+        SIS(name=:rsv, beta=0.04, dur_inf=4.0, init_prev=0.01),
+    ],
+    connectors = [
+        Seasonality(disease_name=:flu, amplitude=0.6, peak_day=0.0),
+        Seasonality(disease_name=:rsv, amplitude=0.4, peak_day=60.0),
+    ],
+    dt = 1.0,
+    stop = 40.0,
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim_multi)
+
+prev_flu = get_result(sim_multi, :flu, :prevalence)
+prev_rsv = get_result(sim_multi, :rsv, :prevalence)
+
+plot(0:length(prev_flu)-1, prev_flu, label=&quot;Flu (peak day 0)&quot;, lw=2, color=:red)
+plot!(0:length(prev_rsv)-1, prev_rsv, label=&quot;RSV (peak day 60)&quot;, lw=2, color=:blue)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Prevalence&quot;)
+title!(&quot;Two Diseases with Different Seasonal Patterns&quot;)</code></pre><p><img src="../07_connectors_files/figure-commonmark/cell-9-output-1.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li><strong><code>Seasonality</code></strong> modulates beta with a cosine function: <code>β(t) = β × (1 + A·cos(2π(t - peak_day)/365))</code></li><li><code>amplitude</code> controls the strength of seasonal variation (0 = none, 1 = full)</li><li><code>peak_day</code> shifts when peak transmission occurs</li><li>Seasonality is most visible with SIS models that maintain endemic transmission</li><li>Each disease can have its own connector with independent parameters</li><li>Connectors enable cross-disease interactions without modifying disease code</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../06_interventions/">« Interventions</a><a class="docs-footer-nextpage" href="../08_measles/">Measles (SEIR) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

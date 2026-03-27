@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Measles (SEIR) · Starsim.jl</title><meta name="title" content="Measles (SEIR) · Starsim.jl"/><meta property="og:title" content="Measles (SEIR) · Starsim.jl"/><meta property="twitter:title" content="Measles (SEIR) · Starsim.jl"/><meta name="description" content="Documentation for Starsim.jl."/><meta property="og:description" content="Documentation for Starsim.jl."/><meta property="twitter:description" content="Documentation for Starsim.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Starsim.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/getting_started/">Getting started</a></li><li><a class="tocitem" href="../../guide/diseases/">Diseases</a></li><li><a class="tocitem" href="../../guide/networks/">Networks</a></li><li><a class="tocitem" href="../../guide/demographics/">Demographics</a></li><li><a class="tocitem" href="../../guide/interventions/">Interventions</a></li><li><a class="tocitem" href="../../guide/crn/">CRN</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../01_introduction/">Introduction</a></li><li><a class="tocitem" href="../02_building_a_model/">Building a model</a></li><li><a class="tocitem" href="../03_demographics/">Demographics</a></li><li><a class="tocitem" href="../04_diseases/">Disease models</a></li><li><a class="tocitem" href="../05_networks/">Contact networks</a></li><li><a class="tocitem" href="../06_interventions/">Interventions</a></li><li><a class="tocitem" href="../07_connectors/">Connectors</a></li><li class="is-active"><a class="tocitem" href>Measles (SEIR)</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#A-basic-measles-SEIR-model"><span>A basic measles SEIR model</span></a></li><li><a class="tocitem" href="#Epidemic-dynamics"><span>Epidemic dynamics</span></a></li><li><a class="tocitem" href="#Key-epidemic-metrics"><span>Key epidemic metrics</span></a></li><li><a class="tocitem" href="#SIR-vs-SEIR-comparison"><span>SIR vs SEIR comparison</span></a></li><li><a class="tocitem" href="#Vaccination-scenarios"><span>Vaccination scenarios</span></a></li><li><a class="tocitem" href="#Outbreak-response-timing"><span>Outbreak response timing</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../09_cholera/">Cholera (environmental)</a></li><li><a class="tocitem" href="../10_ebola/">Ebola (severity)</a></li><li><a class="tocitem" href="../11_hiv/">HIV (sexual networks)</a></li><li><a class="tocitem" href="../12_multisim/">MultiSim</a></li><li><a class="tocitem" href="../13_calibration/">Calibration</a></li><li><a class="tocitem" href="../14_malaria/">Malaria (metapopulation)</a></li><li><a class="tocitem" href="../15_composition/">Composition (Catlab)</a></li><li><a class="tocitem" href="../16_automatic_differentiation/">Automatic differentiation</a></li><li><a class="tocitem" href="../17_gpu/">GPU acceleration</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Vignettes</a></li><li class="is-active"><a href>Measles (SEIR)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Measles (SEIR)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Measles-Outbreak-Modeling-with-SEIR"><a class="docs-heading-anchor" href="#Measles-Outbreak-Modeling-with-SEIR">Measles Outbreak Modeling with SEIR</a><a id="Measles-Outbreak-Modeling-with-SEIR-1"></a><a class="docs-heading-anchor-permalink" href="#Measles-Outbreak-Modeling-with-SEIR" title="Permalink"></a></h1><p>Simon Frost</p><ul><li><a href="#overview">Overview</a></li><li><a href="#a-basic-measles-seir-model">A basic measles SEIR model</a></li><li><a href="#epidemic-dynamics">Epidemic dynamics</a></li><li><a href="#key-epidemic-metrics">Key epidemic metrics</a></li><li><a href="#sir-vs-seir-comparison">SIR vs SEIR comparison</a></li><li><a href="#vaccination-scenarios">Vaccination scenarios</a></li><li><a href="#outbreak-response-timing">Outbreak response timing</a></li><li><a href="#summary">Summary</a></li></ul><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Measles is a highly infectious viral disease with a basic reproduction number (R₀) of 12–18. It follows an SEIR (Susceptible → Exposed → Infectious → Recovered) pattern:</p><ul><li><strong>Incubation (exposed) period</strong>: ~8–12 days</li><li><strong>Infectious period</strong>: ~6–11 days</li><li><strong>Transmission probability</strong>: Very high given contact</li></ul><p>In this vignette, we model a measles outbreak using the <code>SEIR</code> disease model in Starsim.jl, compare dynamics with and without vaccination, and explore outbreak response timing.</p><h2 id="A-basic-measles-SEIR-model"><a class="docs-heading-anchor" href="#A-basic-measles-SEIR-model">A basic measles SEIR model</a><a id="A-basic-measles-SEIR-model-1"></a><a class="docs-heading-anchor-permalink" href="#A-basic-measles-SEIR-model" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Starsim
+using Plots
+
+# Measles parameters (CDC estimates)
+sim = Sim(
+    n_agents = 10_000,
+    networks = RandomNet(n_contacts=15),  # high contact rate for measles
+    diseases = SEIR(
+        name = :measles,
+        beta = 0.3,         # high transmission rate
+        dur_exp = 8.0,      # 8 day incubation
+        dur_inf = 11.0,     # 11 day infectious period
+        init_prev = 0.001,  # seed with 10 cases
+    ),
+    dt = 1.0,
+    stop = 180.0,   # 6 months
+    rand_seed = 42,
+    verbose = 0,
+)
+run!(sim)</code></pre><pre><code class="nohighlight hljs">Sim(10000 agents, 0.0→180.0, dt=1.0, nets=1, dis=1, status=complete)</code></pre><h2 id="Epidemic-dynamics"><a class="docs-heading-anchor" href="#Epidemic-dynamics">Epidemic dynamics</a><a id="Epidemic-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Epidemic-dynamics" title="Permalink"></a></h2><pre><code class="language-julia hljs">n_sus = get_result(sim, :measles, :n_susceptible)
+n_exp = get_result(sim, :measles, :n_exposed)
+n_inf = get_result(sim, :measles, :n_infected)
+n_rec = get_result(sim, :measles, :n_recovered)
+
+tvec = 0:length(n_sus)-1
+plot(tvec, n_sus, label=&quot;Susceptible&quot;, lw=2, color=:blue)
+plot!(tvec, n_exp, label=&quot;Exposed&quot;, lw=2, color=:orange)
+plot!(tvec, n_inf, label=&quot;Infectious&quot;, lw=2, color=:red)
+plot!(tvec, n_rec, label=&quot;Recovered&quot;, lw=2, color=:green)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Number of agents&quot;)
+title!(&quot;Measles SEIR Dynamics&quot;)</code></pre><p><img src="../08_measles_files/figure-commonmark/cell-3-output-1.svg" alt/></p><h2 id="Key-epidemic-metrics"><a class="docs-heading-anchor" href="#Key-epidemic-metrics">Key epidemic metrics</a><a id="Key-epidemic-metrics-1"></a><a class="docs-heading-anchor-permalink" href="#Key-epidemic-metrics" title="Permalink"></a></h2><pre><code class="language-julia hljs">prev = get_result(sim, :measles, :prevalence)
+
+println(&quot;Peak prevalence: $(round(maximum(prev), digits=4))&quot;)
+println(&quot;Peak day: $(argmax(prev))&quot;)
+println(&quot;Attack rate: $(round(n_rec[end] / 10_000, digits=4))&quot;)
+println(&quot;Final susceptible: $(Int(n_sus[end]))&quot;)</code></pre><pre><code class="nohighlight hljs">Peak prevalence: 0.9023
+Peak day: 25
+Attack rate: 1.0
+Final susceptible: 0</code></pre><h2 id="SIR-vs-SEIR-comparison"><a class="docs-heading-anchor" href="#SIR-vs-SEIR-comparison">SIR vs SEIR comparison</a><a id="SIR-vs-SEIR-comparison-1"></a><a class="docs-heading-anchor-permalink" href="#SIR-vs-SEIR-comparison" title="Permalink"></a></h2><p>The exposed (latent) period in SEIR delays the epidemic peak and reduces its height compared to SIR with the same effective transmission rate.</p><pre><code class="language-julia hljs"># SIR comparison (same beta, combine dur_exp + dur_inf for total duration)
+sim_sir = Sim(
+    n_agents = 10_000,
+    networks = RandomNet(n_contacts=15),
+    diseases = SIR(
+        name = :measles_sir,
+        beta = 0.3,
+        dur_inf = 19.0,     # dur_exp + dur_inf
+        init_prev = 0.001,
+    ),
+    dt = 1.0, stop = 180.0, rand_seed = 42, verbose = 0,
+)
+run!(sim_sir)
+
+n_inf_sir = get_result(sim_sir, :measles_sir, :n_infected)
+n_inf_seir = get_result(sim, :measles, :n_infected)
+n_exp_seir = get_result(sim, :measles, :n_exposed)
+
+plot(0:length(n_inf_sir)-1, n_inf_sir, label=&quot;SIR (infected)&quot;, lw=2, color=:red, ls=:dash)
+plot!(0:length(n_inf_seir)-1, n_inf_seir, label=&quot;SEIR (infectious)&quot;, lw=2, color=:red)
+plot!(0:length(n_exp_seir)-1, n_exp_seir, label=&quot;SEIR (exposed)&quot;, lw=2, color=:orange)
+xlabel!(&quot;Day&quot;)
+ylabel!(&quot;Count&quot;)
+title!(&quot;SIR vs SEIR: Effect of Latent Period&quot;)</code></pre><p><img src="../08_measles_files/figure-commonmark/cell-5-output-1.svg" alt/></p><h2 id="Vaccination-scenarios"><a class="docs-heading-anchor" href="#Vaccination-scenarios">Vaccination scenarios</a><a id="Vaccination-scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Vaccination-scenarios" title="Permalink"></a></h2><p>Compare outbreak outcomes with different vaccination coverage levels.</p><pre><code class="language-julia hljs">attack_rates = Float64[]
+coverages = [0.0, 0.5, 0.7, 0.85, 0.9, 0.95]
+
+for cov in coverages
+    sim_v = Sim(
+        n_agents = 10_000,
+        networks = RandomNet(n_contacts=15),
+        diseases = SEIR(
+            name = :measles,
+            beta = 0.3,
+            dur_exp = 8.0,
+            dur_inf = 11.0,
+            init_prev = 0.001,
+        ),
+        dt = 1.0, stop = 180.0, rand_seed = 42, verbose = 0,
+    )
+    # Initialize
+    init!(sim_v)
+
+    # Pre-vaccinate: move fraction of susceptibles directly to recovered
+    active = sim_v.people.auids.values
+    disease = sim_v.diseases[:measles]
+    sus_uids = [u for u in active if disease.infection.susceptible.raw[u]]
+    n_vax = Int(round(cov * length(sus_uids)))
+    if n_vax &gt; 0
+        vax_uids = UIDs(sus_uids[1:n_vax])
+        disease.infection.susceptible[vax_uids] = false
+        disease.recovered[vax_uids] = true
+    end
+
+    # Run remaining simulation
+    run!(sim_v)
+    ar = get_result(sim_v, :measles, :n_recovered)[end] / 10_000
+    push!(attack_rates, ar)
+    println(&quot;Coverage $(Int(cov*100))%: attack rate = $(round(ar, digits=4))&quot;)
+end
+
+bar(string.(Int.(coverages .* 100)) .* &quot;%&quot;, attack_rates,
+    label=&quot;Attack rate&quot;, color=:steelblue, ylabel=&quot;Attack rate&quot;,
+    xlabel=&quot;Vaccination coverage&quot;, title=&quot;Impact of Vaccination on Measles Outbreaks&quot;)</code></pre><pre><code class="nohighlight hljs">Coverage 0%: attack rate = 1.0
+Coverage 50%: attack rate = 1.0
+Coverage 70%: attack rate = 1.0
+Coverage 85%: attack rate = 0.9998
+Coverage 90%: attack rate = 0.9987
+Coverage 95%: attack rate = 0.9872</code></pre><p><img src="../08_measles_files/figure-commonmark/cell-6-output-2.svg" alt/></p><h2 id="Outbreak-response-timing"><a class="docs-heading-anchor" href="#Outbreak-response-timing">Outbreak response timing</a><a id="Outbreak-response-timing-1"></a><a class="docs-heading-anchor-permalink" href="#Outbreak-response-timing" title="Permalink"></a></h2><p>How quickly must we respond to an outbreak? We simulate triggering a vaccination campaign at different days after the first detected case.</p><pre><code class="language-julia hljs">response_days = [0, 7, 14, 21, 30, 60]
+attack_rates_response = Float64[]
+
+for delay in response_days
+    sim_r = Sim(
+        n_agents = 10_000,
+        networks = RandomNet(n_contacts=15),
+        diseases = SEIR(
+            name = :measles,
+            beta = 0.3,
+            dur_exp = 8.0,
+            dur_inf = 11.0,
+            init_prev = 0.001,
+        ),
+        dt = 1.0, stop = 180.0, rand_seed = 42, verbose = 0,
+    )
+    init!(sim_r)
+
+    # Run until response day, then vaccinate 80% of remaining susceptibles
+    for ti in 1:sim_r.t.npts
+        sim_r.loop.ti = ti
+        for entry in sim_r.loop.steps
+            entry.fn(sim_r)
+        end
+        if ti == delay
+            disease = sim_r.diseases[:measles]
+            sus = [u for u in sim_r.people.auids.values if disease.infection.susceptible.raw[u]]
+            n_vax = Int(round(0.8 * length(sus)))
+            if n_vax &gt; 0
+                vax_uids = UIDs(sus[1:n_vax])
+                disease.infection.susceptible[vax_uids] = false
+                disease.recovered[vax_uids] = true
+            end
+        end
+    end
+
+    sim_r.complete = true
+    for (_, mod) in all_modules(sim_r)
+        finalize!(mod)
+    end
+
+    ar = get_result(sim_r, :measles, :n_recovered)[end] / 10_000
+    push!(attack_rates_response, ar)
+    println(&quot;Response at day $delay: attack rate = $(round(ar, digits=4))&quot;)
+end
+
+plot(response_days, attack_rates_response, marker=:circle, lw=2,
+    label=&quot;Attack rate&quot;, xlabel=&quot;Response delay (days)&quot;,
+    ylabel=&quot;Attack rate&quot;, title=&quot;Impact of Outbreak Response Timing&quot;)</code></pre><pre><code class="nohighlight hljs">Response at day 0: attack rate = 1.0
+Response at day 7: attack rate = 0.9999
+Response at day 14: attack rate = 1.0
+Response at day 21: attack rate = 1.0
+Response at day 30: attack rate = 1.0
+Response at day 60: attack rate = 1.0</code></pre><p><img src="../08_measles_files/figure-commonmark/cell-7-output-2.svg" alt/></p><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>Measles’ high R₀ requires very high vaccination coverage (\&gt;95%) to prevent outbreaks</li><li>The SEIR latent period delays peak compared to SIR</li><li>Early outbreak response dramatically reduces attack rates</li><li>Even a 1-week delay in response can significantly increase final outbreak size</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../07_connectors/">« Connectors</a><a class="docs-footer-nextpage" href="../09_cholera/">Cholera (environmental) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 27 March 2026 13:12">Friday 27 March 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
