@@ -2,6 +2,7 @@ name = "Starsim"
 uuid = "5377e9c4-d40b-43d5-a471-f7d91c643d71"
 version = "0.1.0"
 authors = ["Simon Frost"]
+repo = "https://github.com/epirecipes/StarSim.jl"
 
 [deps]
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"

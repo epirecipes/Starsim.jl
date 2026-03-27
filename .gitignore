@@ -1,1 +1,6 @@
-.DS_Store
+*.DS_Store
+Manifest.toml
+.venv/
+__pycache__/
+*.pyc
+LocalPreferences.toml
