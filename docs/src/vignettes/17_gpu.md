@@ -3,101 +3,126 @@ Simon Frost
 
 - [Overview](#overview)
 - [Architecture](#architecture)
-- [GPU extension](#gpu-extension)
-  - [When GPU helps](#when-gpu-helps)
-- [Current status](#current-status)
-- [Example (conceptual)](#example-conceptual)
+- [Supported diseases](#supported-diseases)
+- [Usage](#usage)
+- [Performance](#performance)
+- [API reference](#api-reference)
 - [Summary](#summary)
 
 ## Overview
 
-Starsim.jl’s parametric type system enables GPU acceleration by swapping
-`Vector` arrays for GPU-backed arrays (e.g., `MtlVector` from Metal.jl
-for Apple Silicon). This vignette describes the architecture and current
-status of GPU support.
+Starsim.jl provides GPU acceleration via Apple Silicon's Metal.jl through
+the `StarsimMetalExt` package extension (~1,700 lines). Disease dynamics
+(transmission, recovery, state transitions) run on GPU while structurally
+dynamic operations (network rewiring, demographics) remain on CPU.
 
 ## Architecture
 
-Starsim.jl uses parametric types throughout its state system:
+The GPU extension uses a **hybrid CPU/GPU** approach:
+
+**GPU (MtlVector, Float32/UInt8):**
+- Agent state arrays: `susceptible`, `infected`, `recovered`, `exposed`
+- Disease timing arrays: `ti_infected`, `ti_recovered`, `ti_exposed`
+- Transmission kernel (per-edge probability evaluation)
+- Recovery kernel (`ti_recovered ≤ current_ti` check)
+- SEIR exposure-to-infection transition
+- GPU-side result counting (`sum()` on MtlVector)
+
+**CPU (Vector, Float64/Bool):**
+- Network edge lists (rebuilt each timestep for dynamic networks)
+- Recovery duration sampling (lognormal distribution)
+- People management (births, deaths, UID tracking)
+- SIS immunity waning (requires per-agent float arithmetic)
+
+The GPU loop follows the exact same 16-step integration order as the CPU,
+ensuring identical disease dynamics.
+
+## Supported diseases
+
+| Disease | GPU support | Notes |
+|---------|:-----------:|-------|
+| SIR     | ✅          | Full support including lognormal recovery |
+| SIS     | ✅          | Immunity waning handled via CPU roundtrip |
+| SEIR    | ✅          | E→I transition with recovery time on GPU |
+
+## Usage
 
 ``` julia
-# States accept any AbstractVector backend
-struct BoolState
-    raw::Vector{Bool}    # CPU default
-end
+using Starsim, Metal
 
-# Could be:
-# raw::MtlVector{Bool}  # Apple GPU (Metal.jl)
-# raw::CuVector{Bool}   # NVIDIA GPU (CUDA.jl)
-```
-
-The key operations that benefit from GPU acceleration are:
-
-1.  **Transmission computation** — looping over contact edges to compute
-    infection probabilities (embarrassingly parallel)
-2.  **State updates** — bulk transitions (infected → recovered) for all
-    agents
-3.  **Random number generation** — drawing per-agent random values
-
-Operations that remain on CPU: - **Network rewiring** — dynamic partner
-selection involves serial logic - **Births/deaths** — agent
-creation/removal requires dynamic memory allocation - **Result
-aggregation** — small reductions that don’t benefit from GPU
-
-## GPU extension
-
-The `StarsimMetalExt` extension (loaded when `using Metal`) provides:
-
-- `gpu_compute_transmission!()` — Metal kernel for edge-parallel
-  transmission
-- `gpu_update_states!()` — Metal kernel for bulk state transitions
-- `to_gpu(sim)` / `to_cpu(sim)` — conversion utilities
-
-### When GPU helps
-
-| Agent count | CPU (ms/step) | GPU expected | Speedup         |
-|-------------|---------------|--------------|-----------------|
-| 1,000       | 0.04          | ~0.5         | 0.1x (overhead) |
-| 10,000      | 0.4           | ~0.6         | 0.7x            |
-| 100,000     | 4.0           | ~1.5         | 2.7x            |
-| 1,000,000   | 45.0          | ~8.0         | 5.6x            |
-
-GPU acceleration typically becomes worthwhile above 50,000 agents, where
-the parallelism offsets the CPU↔GPU transfer overhead.
-
-## Current status
-
-The GPU extension is **experimental**. Full support requires:
-
-1.  All state arrays to be parameterized on `A <: AbstractVector`
-2.  GPU-compatible random number generation
-3.  Careful management of CPU↔GPU transfers for network operations
-
-The core Starsim.jl design already supports this through its type system
-— the main remaining work is implementing GPU kernels for the
-transmission hot loop and testing with Metal.jl on Apple Silicon.
-
-## Example (conceptual)
-
-``` julia
-# Future API (when GPU extension is complete):
-using Metal
-
+# Simple — use run_gpu! directly
 sim = Sim(
-    n_agents = 1_000_000,
-    diseases = SIR(beta=0.05, dur_inf=10.0, init_prev=0.001),
-    networks = RandomNet(n_contacts=10),
-    start = 0.0, stop = 365.0, dt = 1.0,
-    # array_type = MtlVector,  # Future: GPU backend selection
+    n_agents = 100_000,
+    diseases = [SIR(beta=0.05, dur_inf=10.0, init_prev=0.01)],
+    networks = [RandomNet(n_contacts=10)],
+    stop = 50.0, dt = 1.0,
 )
-init!(sim)
-run!(sim; verbose=1)
+Starsim.run_gpu!(sim; verbose=1)
+
+# Static network mode (edges generated once, cached on GPU)
+sim2 = Sim(
+    n_agents = 1_000_000,
+    diseases = [SIR(beta=0.05, dur_inf=10.0, init_prev=0.01)],
+    networks = [RandomNet(n_contacts=10)],
+    stop = 50.0, dt = 1.0,
+)
+Starsim.run_gpu!(sim2; verbose=1, cache_edges=true)
 ```
+
+## Performance
+
+Benchmarks on Apple M2 Ultra (Metal GPU, 76 GPU cores):
+
+**Dynamic edges (default — edges regenerated each step):**
+
+| Agents | CPU (M a-ts/s) | GPU (M a-ts/s) | Speedup |
+|--------|:-:|:-:|:-:|
+| 1K     | 12 | 0.2 | 0.02x |
+| 10K    | 12 | 1.6 | 0.13x |
+| 100K   | 12 | 4.2 | 0.36x |
+| 500K   | 9  | 5.1 | 0.55x |
+| 1M     | 9  | 5.2 | 0.60x |
+
+**Cached edges (static network — single upload):**
+
+| Agents | CPU (M a-ts/s) | GPU (M a-ts/s) | Speedup |
+|--------|:-:|:-:|:-:|
+| 10K    | 12 | 2.0 | 0.16x |
+| 100K   | 11 | 6.7 | 0.59x |
+| 500K   | 9  | 8.0 | 0.91x |
+| 1M     | 9  | 8.2 | 0.94x |
+
+The GPU approaches CPU performance at 1M+ agents with cached edges.
+Julia's CPU code is highly optimized on Apple Silicon (native SIMD),
+making GPU acceleration less impactful than on platforms with weaker CPUs
+or discrete GPUs. The GPU path is most useful for:
+
+- Very large simulations (1M+ agents) with static networks
+- Future CUDA.jl support on NVIDIA GPUs (where discrete GPU memory
+  bandwidth dominates)
+- Demonstrating the GPU-ready architecture
+
+**Correctness**: GPU vs CPU mean trajectory correlation r > 0.999 for
+all three disease types (SIR, SIS, SEIR) over 30 seeds.
+
+## API reference
+
+| Function | Description |
+|----------|-------------|
+| `to_gpu(sim)` | Convert initialized Sim to GPUSim |
+| `to_cpu(gsim)` | Copy GPU state back to CPU Sim |
+| `run_gpu!(sim)` | Full GPU simulation lifecycle |
+| `gpu_step_state!(gsim, :sir; current_ti=ti)` | Recovery transitions on GPU |
+| `gpu_transmit!(gsim, :sir; current_ti=ti)` | Transmission with edge upload |
+| `cache_edges!(gsim)` | Upload edges once for static networks |
+| `gpu_transmit_cached!(gsim, :sir; current_ti=ti)` | Transmission with cached edges |
+| `sync_to_gpu!(gsim)` | Re-upload CPU state after CPU-side modifications |
 
 ## Summary
 
-Julia’s type system makes GPU support a natural extension rather than a
-rewrite. The same simulation code runs on CPU and GPU by changing the
-array backend type. This is a significant advantage over Python, where
-GPU support typically requires a separate implementation (e.g., JAX,
-CuPy).
+The Metal.jl GPU extension provides a working GPU backend for SIR, SIS,
+and SEIR disease models. While Apple Silicon's shared memory architecture
+and Julia's fast CPU code limit GPU speedups on this platform, the
+architecture is designed to transfer to discrete GPU platforms (CUDA.jl)
+where larger speedups are expected. The GPU path produces statistically
+identical results to the CPU path (r > 0.999).

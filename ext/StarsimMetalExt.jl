@@ -62,6 +62,7 @@ module StarsimMetalExt
 
 using Starsim
 using Metal
+using Distributions
 
 # ============================================================================
 # Constants
@@ -97,8 +98,9 @@ end
 
 GPU-resident mirror of disease state arrays for one `AbstractInfection`.
 
-Supports SIR (with `recovered`/`ti_recovered`) and SIS (those fields are
-`nothing`). All Float64 values are stored as Float32; Bool as UInt8.
+Supports SIR (with `recovered`/`ti_recovered`), SIS (those fields are
+`nothing`), and SEIR (adds `exposed`/`ti_exposed`). All Float64 values
+are stored as Float32; Bool as UInt8.
 """
 struct GPUDiseaseArrays
     susceptible::MtlVector{UInt8}
@@ -109,6 +111,9 @@ struct GPUDiseaseArrays
     rel_sus::MtlVector{Float32}
     rel_trans::MtlVector{Float32}
     n::Int
+    # SEIR-specific (nothing for SIR/SIS)
+    exposed::Union{MtlVector{UInt8}, Nothing}
+    ti_exposed::Union{MtlVector{Float32}, Nothing}
 end
 
 """
@@ -183,6 +188,8 @@ function _sir_to_gpu(d::Starsim.SIR)
         MtlVector{Float32}(Float32.(d.infection.rel_sus.raw)),
         MtlVector{Float32}(Float32.(d.infection.rel_trans.raw)),
         n,
+        nothing,  # exposed (SIR has none)
+        nothing,  # ti_exposed
     )
 end
 
@@ -191,12 +198,31 @@ function _sis_to_gpu(d::Starsim.SIS)
     GPUDiseaseArrays(
         MtlVector{UInt8}(UInt8.(d.infection.susceptible.raw)),
         MtlVector{UInt8}(UInt8.(d.infection.infected.raw)),
-        nothing,
+        nothing,  # no recovered state (SIS cycles back to susceptible)
         MtlVector{Float32}(Float32.(d.infection.ti_infected.raw)),
-        nothing,
+        MtlVector{Float32}(Float32.(d.ti_recovered.raw)),  # SIS uses ti_recovered for timing
         MtlVector{Float32}(Float32.(d.infection.rel_sus.raw)),
         MtlVector{Float32}(Float32.(d.infection.rel_trans.raw)),
         n,
+        nothing,  # exposed (SIS has none)
+        nothing,  # ti_exposed
+    )
+end
+
+function _seir_to_gpu(d::Starsim.SEIR)
+    n = d.infection.infected.len_tot
+    GPUDiseaseArrays(
+        MtlVector{UInt8}(UInt8.(d.infection.susceptible.raw)),
+        MtlVector{UInt8}(UInt8.(d.infection.infected.raw)),
+        MtlVector{UInt8}(UInt8.(d.recovered.raw)),
+        MtlVector{Float32}(Float32.(d.infection.ti_infected.raw)),
+        MtlVector{Float32}(Float32.(d.ti_recovered.raw)),
+        MtlVector{Float32}(Float32.(d.infection.rel_sus.raw)),
+        MtlVector{Float32}(Float32.(d.infection.rel_trans.raw)),
+        n,
+        # SEIR-specific fields
+        MtlVector{UInt8}(UInt8.(d.exposed.raw)),
+        MtlVector{Float32}(Float32.(d.ti_exposed.raw)),
     )
 end
 
@@ -209,7 +235,7 @@ The simulation must be initialized (`init!(sim)`) before calling this.
 Returns a [`GPUSim`](@ref) that pairs the original `Sim` with GPU arrays.
 Network edge lists are NOT copied (they are rebuilt each timestep on CPU).
 
-Currently supports `SIR` and `SIS` diseases. Unsupported disease types
+Currently supports `SIR`, `SIS`, and `SEIR` diseases. Unsupported disease types
 are skipped with a warning.
 """
 function Starsim.to_gpu(sim::Starsim.Sim)
@@ -223,6 +249,8 @@ function Starsim.to_gpu(sim::Starsim.Sim)
             gpu_diseases[name] = _sir_to_gpu(disease)
         elseif disease isa Starsim.SIS
             gpu_diseases[name] = _sis_to_gpu(disease)
+        elseif disease isa Starsim.SEIR
+            gpu_diseases[name] = _seir_to_gpu(disease)
         else
             @warn "GPU acceleration not yet implemented for $(typeof(disease)); skipping :$name"
         end
@@ -324,10 +352,39 @@ function _sis_from_gpu!(d::Starsim.SIS, gpu::GPUDiseaseArrays)
     cpu_ti_inf    = Array(gpu.ti_infected)
     cpu_rel_sus   = Array(gpu.rel_sus)
     cpu_rel_trans = Array(gpu.rel_trans)
+    cpu_ti_rec    = gpu.ti_recovered !== nothing ? Array(gpu.ti_recovered) : nothing
     @inbounds for i in 1:n
         d.infection.susceptible.raw[i] = cpu_sus[i] != 0x00
         d.infection.infected.raw[i]    = cpu_inf[i] != 0x00
         d.infection.ti_infected.raw[i] = Float64(cpu_ti_inf[i])
+        d.infection.rel_sus.raw[i]     = Float64(cpu_rel_sus[i])
+        d.infection.rel_trans.raw[i]   = Float64(cpu_rel_trans[i])
+        if cpu_ti_rec !== nothing
+            d.ti_recovered.raw[i] = Float64(cpu_ti_rec[i])
+        end
+    end
+    return d
+end
+
+function _seir_from_gpu!(d::Starsim.SEIR, gpu::GPUDiseaseArrays)
+    n = min(length(d.infection.infected.raw), gpu.n)
+    cpu_sus       = Array(gpu.susceptible)
+    cpu_inf       = Array(gpu.infected)
+    cpu_rec       = Array(gpu.recovered)
+    cpu_exp       = Array(gpu.exposed)
+    cpu_ti_inf    = Array(gpu.ti_infected)
+    cpu_ti_rec    = Array(gpu.ti_recovered)
+    cpu_ti_exp    = Array(gpu.ti_exposed)
+    cpu_rel_sus   = Array(gpu.rel_sus)
+    cpu_rel_trans = Array(gpu.rel_trans)
+    @inbounds for i in 1:n
+        d.infection.susceptible.raw[i] = cpu_sus[i] != 0x00
+        d.infection.infected.raw[i]    = cpu_inf[i] != 0x00
+        d.recovered.raw[i]             = cpu_rec[i] != 0x00
+        d.exposed.raw[i]               = cpu_exp[i] != 0x00
+        d.infection.ti_infected.raw[i] = Float64(cpu_ti_inf[i])
+        d.ti_recovered.raw[i]          = Float64(cpu_ti_rec[i])
+        d.ti_exposed.raw[i]            = Float64(cpu_ti_exp[i])
         d.infection.rel_sus.raw[i]     = Float64(cpu_rel_sus[i])
         d.infection.rel_trans.raw[i]   = Float64(cpu_rel_trans[i])
     end
@@ -352,6 +409,8 @@ function Starsim.to_cpu(gsim::GPUSim)
             _sir_from_gpu!(disease, gpu_dis)
         elseif disease isa Starsim.SIS
             _sis_from_gpu!(disease, gpu_dis)
+        elseif disease isa Starsim.SEIR
+            _seir_from_gpu!(disease, gpu_dis)
         end
     end
     return gsim.sim
@@ -413,15 +472,16 @@ function _apply_infections_sir_kernel!(
 end
 
 function _apply_infections_sis_kernel!(
-    susceptible, infected, ti_infected,
-    new_infected, current_ti, n,
+    susceptible, infected, ti_infected, ti_recovered,
+    new_infected, current_ti, exp_dur, n,
 )
     i = thread_position_in_grid_1d()
     i > n && return
     if new_infected[i] == 0x01
-        susceptible[i] = 0x00
-        infected[i]    = 0x01
-        ti_infected[i] = current_ti
+        susceptible[i]  = 0x00
+        infected[i]     = 0x01
+        ti_infected[i]  = current_ti
+        ti_recovered[i] = current_ti + exp_dur[i]
     end
     return
 end
@@ -437,6 +497,18 @@ function _sir_recovery_kernel!(infected, recovered, ti_recovered, current_ti, n)
     if infected[i] == 0x01 && ti_recovered[i] <= current_ti
         infected[i]  = 0x00
         recovered[i] = 0x01
+    end
+    return
+end
+
+# SIS recovery: infected → susceptible when ti_recovered <= current_ti
+# Uses per-agent ti_recovered (lognormal durations), matching CPU SIS exactly.
+function _sis_recovery_ti_kernel!(infected, susceptible, ti_recovered, current_ti, n)
+    i = thread_position_in_grid_1d()
+    i > n && return
+    if infected[i] == 0x01 && ti_recovered[i] <= current_ti
+        infected[i]    = 0x00
+        susceptible[i] = 0x01
     end
     return
 end
@@ -460,6 +532,34 @@ function _waning_kernel!(recovered, susceptible, ti_recovered, current_ti, wane_
     if recovered[i] == 0x01 && (current_ti - ti_recovered[i]) >= wane_dur
         recovered[i]   = 0x00
         susceptible[i] = 0x01
+    end
+    return
+end
+
+# SEIR: exposed → infected when latent period has elapsed, with recovery time set
+function _seir_exposure_kernel!(exposed, infected, ti_exposed, ti_infected, ti_recovered, current_ti, dur_exp_ts, recovery_dur, n)
+    i = thread_position_in_grid_1d()
+    i > n && return
+    if exposed[i] == 0x01 && (current_ti - ti_exposed[i]) >= dur_exp_ts
+        exposed[i]      = 0x00
+        infected[i]     = 0x01
+        ti_infected[i]  = current_ti
+        ti_recovered[i] = current_ti + recovery_dur[i]
+    end
+    return
+end
+
+# SEIR apply new exposures: susceptible → exposed
+function _apply_exposures_seir_kernel!(
+    susceptible, exposed, ti_exposed,
+    new_infected, current_ti, n,
+)
+    i = thread_position_in_grid_1d()
+    i > n && return
+    if new_infected[i] == 0x01
+        susceptible[i] = 0x00
+        exposed[i]     = 0x01
+        ti_exposed[i]  = current_ti
     end
     return
 end
@@ -668,6 +768,8 @@ Run GPU-accelerated state transitions (recovery) for one disease.
 
 - **SIR**: infected → recovered when `ti_recovered ≤ current_ti`
 - **SIS**: infected → susceptible when infection duration has elapsed
+- **SEIR**: exposed → infected when latent period has elapsed,
+            then infected → recovered when `ti_recovered ≤ current_ti`
 
 This replaces the CPU `step_state!` call. Disease-induced death (`p_death`)
 is **not** handled on GPU; use `to_cpu` and the CPU code path for that.
@@ -679,17 +781,48 @@ function gpu_step_state!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     groups = cld(n, METAL_THREADS)
     ti_f = Float32(current_ti)
 
-    if disease isa Starsim.SIR && gpu_dis.recovered !== nothing
+    if disease isa Starsim.SEIR && gpu_dis.exposed !== nothing
+        dt = gsim.sim.pars.dt
+        dur_exp_ts = Float32(disease.dur_exp / dt)
+        dur_inf_ts = Float32(disease.dur_inf / dt)
+
+        # Pre-sample recovery durations for E→I transitions
+        cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, Int(n))
+        copyto!(gsim.jitter_buf, 1, cpu_dur, 1, Int(n))
+
+        # Exposed → Infected (latent period elapsed, with recovery time)
+        @metal threads=METAL_THREADS groups=groups _seir_exposure_kernel!(
+            gpu_dis.exposed, gpu_dis.infected, gpu_dis.ti_exposed,
+            gpu_dis.ti_infected, gpu_dis.ti_recovered, ti_f, dur_exp_ts,
+            gsim.jitter_buf, n,
+        )
+
+        # Infected → Recovered
+        if gpu_dis.recovered !== nothing
+            @metal threads=METAL_THREADS groups=groups _sir_recovery_kernel!(
+                gpu_dis.infected, gpu_dis.recovered, gpu_dis.ti_recovered,
+                ti_f, n,
+            )
+        end
+    elseif disease isa Starsim.SIR && gpu_dis.recovered !== nothing
         @metal threads=METAL_THREADS groups=groups _sir_recovery_kernel!(
             gpu_dis.infected, gpu_dis.recovered, gpu_dis.ti_recovered,
             ti_f, n,
         )
     elseif disease isa Starsim.SIS
-        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
-        @metal threads=METAL_THREADS groups=groups _sis_recovery_kernel!(
-            gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_infected,
-            ti_f, dur_inf_ts, n,
-        )
+        # SIS uses ti_recovered (lognormal durations), same as SIR
+        if gpu_dis.ti_recovered !== nothing
+            @metal threads=METAL_THREADS groups=groups _sis_recovery_ti_kernel!(
+                gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_recovered,
+                ti_f, n,
+            )
+        else
+            dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+            @metal threads=METAL_THREADS groups=groups _sis_recovery_kernel!(
+                gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_infected,
+                ti_f, dur_inf_ts, n,
+            )
+        end
     end
 
     Metal.synchronize()
@@ -707,6 +840,32 @@ function _ensure_edge_capacity!(gsim::GPUSim, n::Int)
         gsim.edge_capacity = new_cap
     end
     return
+end
+
+"""
+Sample `n` recovery durations on CPU matching the disease's recovery_dist.
+Returns a Vector{Float32} of duration values (in timesteps).
+"""
+function _sample_recovery_durations(disease, dur_inf_ts::Float32, n::Int)
+    mean_f = Float64(dur_inf_ts)
+    dist = disease.recovery_dist
+    buf = Vector{Float32}(undef, n)
+    rng = disease.rng
+    if dist === :exponential
+        d = Distributions.Exponential(mean_f)
+        @inbounds for i in 1:n
+            buf[i] = Float32(rand(rng, d))
+        end
+    else  # :lognormal (default, matches Python)
+        std_f = 1.0
+        σ² = log(1 + (std_f / mean_f)^2)
+        μ = log(mean_f) - σ² / 2
+        d = Distributions.LogNormal(μ, sqrt(σ²))
+        @inbounds for i in 1:n
+            buf[i] = Float32(rand(rng, d))
+        end
+    end
+    return buf
 end
 
 """
@@ -784,11 +943,16 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     # Apply accumulated new infections
     groups_a = cld(n_agents, METAL_THREADS)
 
-    if disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
+    if disease isa Starsim.SEIR && gpu_dis.exposed !== nothing
+        # SEIR: new infections go to Exposed state (not directly Infected)
+        @metal threads=METAL_THREADS groups=groups_a _apply_exposures_seir_kernel!(
+            gpu_dis.susceptible, gpu_dis.exposed, gpu_dis.ti_exposed,
+            gsim.new_infected, ti_f, n_agents,
+        )
+    elseif disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
         dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
-        # Exponential recovery duration: -mean * log(U), U ~ Uniform(0,1)
-        cpu_rng = rand(Float32, gpu_dis.n)
-        cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng, 1f-10)))
+        # Sample recovery durations matching CPU distribution
+        cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, gpu_dis.n)
         copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
         @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
@@ -796,9 +960,13 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
             gsim.jitter_buf, n_agents,
         )
     elseif disease isa Starsim.SIS
+        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+        cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, gpu_dis.n)
+        copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
         @metal threads=METAL_THREADS groups=groups_a _apply_infections_sis_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
-            gsim.new_infected, ti_f, n_agents,
+            gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+            gsim.jitter_buf, n_agents,
         )
     end
 
@@ -905,6 +1073,17 @@ function sync_to_gpu!(gsim::GPUSim)
             copyto!(gpu_dis.ti_recovered, Float32.(disease.ti_recovered.raw[1:n]))
         elseif disease isa Starsim.SIS
             _sync_infection_to_gpu!(disease.infection, gpu_dis)
+            if gpu_dis.ti_recovered !== nothing
+                n = min(length(disease.ti_recovered.raw), gpu_dis.n)
+                copyto!(gpu_dis.ti_recovered, Float32.(disease.ti_recovered.raw[1:n]))
+            end
+        elseif disease isa Starsim.SEIR
+            _sync_infection_to_gpu!(disease.infection, gpu_dis)
+            n = min(length(disease.recovered.raw), gpu_dis.n)
+            copyto!(gpu_dis.recovered,    UInt8.(disease.recovered.raw[1:n]))
+            copyto!(gpu_dis.ti_recovered, Float32.(disease.ti_recovered.raw[1:n]))
+            copyto!(gpu_dis.exposed,      UInt8.(disease.exposed.raw[1:n]))
+            copyto!(gpu_dis.ti_exposed,   Float32.(disease.ti_exposed.raw[1:n]))
         end
     end
     return gsim
@@ -1044,9 +1223,8 @@ function gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
 
             Metal.synchronize()
 
-            # Apply infections with exponential recovery duration
-            cpu_rng = rand(Float32, Int(n_agents))
-            cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng, 1f-10)))
+            # Apply infections with lognormal recovery duration (matching CPU)
+            cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, Int(n_agents))
             copyto!(gsim.jitter_buf, 1, cpu_dur, 1, Int(n_agents))
             @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
                 gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
@@ -1247,9 +1425,7 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
 
     if disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
         dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
-        # Exponential recovery duration: -mean * log(U), U ~ Uniform(0,1)
-        cpu_rng_dur = rand(Float32, gpu_dis.n)
-        cpu_dur = Float32.(-dur_inf_ts .* log.(max.(cpu_rng_dur, 1f-10)))
+        cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, gpu_dis.n)
         copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
         @metal threads=METAL_THREADS groups=groups_a _apply_infections_sir_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
@@ -1272,28 +1448,104 @@ end
 # ============================================================================
 
 """
-    Starsim.run_gpu!(sim::Sim; verbose::Int=1)
+Apply SIS immunity boost to agents newly infected this step.
+
+Called after `to_cpu` in the results round-trip. Compares current state
+(from GPU) with previous state to detect new infections and applies
+`imm_boost` to their immunity level.
+"""
+function _gpu_sis_immunity_boost!(sim, disease_names)
+    for dname in disease_names
+        disease = sim.diseases[dname]
+        if disease isa Starsim.SIS
+            imm_raw = disease.immunity.raw
+            ti_inf_raw = disease.infection.ti_infected.raw
+            ti = Float64(sim.loop.ti)
+            @inbounds for u in sim.people.auids.values
+                # Agent was newly infected this step if ti_infected == current_ti
+                if disease.infection.infected.raw[u] && ti_inf_raw[u] == ti
+                    imm_raw[u] += disease.imm_boost
+                    disease.infection.rel_sus.raw[u] = max(0.0, 1.0 - imm_raw[u])
+                end
+            end
+        end
+    end
+    return
+end
+
+"""
+Handle SIS immunity waning on CPU for GPU simulation.
+
+SIS has immunity that wanes each step, modifying `rel_sus`. Since this
+requires per-agent float arithmetic on the `immunity` array (which is
+NOT on GPU), we need a GPU→CPU sync to run the waning, then re-upload.
+"""
+function _gpu_sis_immunity_waning!(gsim::GPUSim, sim, disease_names)
+    for dname in disease_names
+        disease = sim.diseases[dname]
+        if disease isa Starsim.SIS
+            gpu_dis = gsim.diseases[dname]
+            n = gpu_dis.n
+
+            # First, sync GPU infected state to CPU so we know current state
+            cpu_inf = Array(gpu_dis.infected)
+            @inbounds for i in 1:min(length(disease.infection.infected.raw), n)
+                disease.infection.infected.raw[i] = cpu_inf[i] != 0x00
+            end
+            # Also sync susceptible
+            cpu_sus = Array(gpu_dis.susceptible)
+            @inbounds for i in 1:min(length(disease.infection.susceptible.raw), n)
+                disease.infection.susceptible.raw[i] = cpu_sus[i] != 0x00
+            end
+
+            # Run immunity waning on CPU (matches _update_immunity!)
+            dt = sim.pars.dt
+            waning_prob = 1.0 - exp(-disease.waning * dt)
+            imm_raw = disease.immunity.raw
+            rel_sus_raw = disease.infection.rel_sus.raw
+            @inbounds for u in sim.people.auids.values
+                if imm_raw[u] > 0.0
+                    imm_raw[u] *= (1.0 - waning_prob)
+                    rel_sus_raw[u] = max(0.0, 1.0 - imm_raw[u])
+                end
+            end
+
+            # Re-upload rel_sus to GPU
+            copyto!(gpu_dis.rel_sus, Float32.(rel_sus_raw[1:n]))
+        end
+    end
+    return
+end
+
+"""
+    Starsim.run_gpu!(sim::Sim; verbose::Int=1, cache_edges::Bool=false)
 
 GPU backend for `run!`. Called automatically when `run!(sim; backend=:gpu)`.
 
-Handles the full lifecycle:
-1. `init!(sim)` if needed
-2. Generate static edges on CPU, upload to GPU with `cache_edges!`
-3. Run the integration loop using `gpu_step_fused!` (fused kernels, GPU-side RNG)
-4. Track results each timestep (GPU→CPU→GPU round-trip)
-5. `to_cpu(gsim)` to write final state back
-6. Finalize and scale results
+Follows the exact same 16-step loop order as the CPU path:
+
+1. `start_step!` for all modules (jump distributions)
+2. `step_state!` (recovery) on GPU
+3. `networks.step` on CPU (regenerate edges)
+4. `diseases.step` (transmission) on GPU with fresh edges uploaded each step
+5. `to_cpu` → `update_results!` → `sync_to_gpu!` (results round-trip)
+6. `finish_step!` for all modules
+
+# Keyword arguments
+- `verbose::Int=1`: 0=silent, 1=summary, 2=per-step progress
+- `cache_edges::Bool=false`: if `true`, edges are generated once and reused
+  every step (only correct for truly static networks). Default `false` re-steps
+  networks on CPU each timestep matching the CPU loop exactly.
 
 # Example
 ```julia
 using Metal  # triggers GPU extension loading
-sim = Sim(n_agents=1_000_000, diseases=SIR(beta=0.05, dur_inf=10.0),
-          networks=RandomNet(n_contacts=10), stop=365.0)
+sim = Sim(n_agents=1_000_000, diseases=[SIR(beta=0.05, dur_inf=10.0)],
+          networks=[RandomNet(n_contacts=10)], stop=365.0)
 run!(sim; backend=:gpu)
-sim.plot()
 ```
 """
-function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1)
+function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=false)
     if !sim.initialized
         Starsim.init!(sim)
     end
@@ -1306,15 +1558,16 @@ function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1)
                 "dt=$(sim.pars.dt), device=$(Metal.current_device()))")
     end
 
-    # Generate edges once on CPU, then cache on GPU
-    for (_, net) in sim.networks
-        Starsim.step!(net, sim)
-    end
-
     gsim = Starsim.to_gpu(sim)
-    cache_edges!(gsim)
-
     disease_names = collect(keys(sim.diseases))
+
+    # For cached-edge mode, generate edges once and upload
+    if cache_edges
+        for (_, net) in sim.networks
+            Starsim.step!(net, sim)
+        end
+        cache_edges!(gsim)
+    end
 
     for ti in 1:npts
         sim.loop.ti = ti
@@ -1324,32 +1577,90 @@ function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1)
             println("  Step $ti / $npts (year=$(round(year, digits=2)))")
         end
 
-        # Module lifecycle: start_step
+        # Step 2: Module lifecycle — start_step (jump distributions)
         for (_, mod) in Starsim.all_modules(sim)
             Starsim.start_step!(mod, sim)
         end
 
-        # GPU disease steps (fused recovery + transmission)
+        # Step 5: Disease state transitions (recovery) on GPU
         for dname in disease_names
-            gpu_step_fused!(gsim, dname; current_ti=ti)
+            gpu_step_state!(gsim, dname; current_ti=ti)
         end
 
-        # Results tracking: round-trip GPU → CPU → GPU
-        Starsim.to_cpu(gsim)
-        Starsim.update_people_results!(sim.people, ti, sim.results)
-        for (_, mod) in Starsim.all_modules(sim)
-            Starsim.update_results!(mod, sim)
-        end
-        if ti < npts
-            sync_to_gpu!(gsim)
+        # SIS immunity waning: requires CPU roundtrip to update rel_sus
+        # This must happen after recovery and before transmission
+        _gpu_sis_immunity_waning!(gsim, sim, disease_names)
+
+        # Step 7: Network rewiring on CPU (regenerates edges)
+        if !cache_edges
+            for (_, net) in sim.networks
+                Starsim.step!(net, sim)
+            end
         end
 
-        # Module lifecycle: finish_step
+        # Step 9: Transmission on GPU (uploads fresh edges each step)
+        for dname in disease_names
+            if cache_edges && gsim.cached_edges
+                gpu_transmit_cached!(gsim, dname; current_ti=ti)
+            else
+                gpu_transmit!(gsim, dname; current_ti=ti)
+            end
+        end
+
+        # Steps 10-12: Results tracking
+        _has_sis = any(sim.diseases[dname] isa Starsim.SIS for dname in disease_names)
+
+        if _has_sis
+            # SIS requires full GPU→CPU round-trip for immunity tracking
+            Starsim.to_cpu(gsim)
+            _gpu_sis_immunity_boost!(sim, disease_names)
+            Starsim.update_people_results!(sim.people, ti, sim.results)
+            for (_, mod) in Starsim.all_modules(sim)
+                Starsim.update_results!(mod, sim)
+            end
+            if ti < npts
+                sync_to_gpu!(gsim)
+            end
+        else
+            # Fast path: count results on GPU (no full state transfer)
+            n_alive = Int(sum(gsim.people.alive))
+            sim.results[:n_alive][ti] = Float64(n_alive)
+
+            for dname in disease_names
+                gpu_dis = gsim.diseases[dname]
+                disease = sim.diseases[dname]
+                md = Starsim.module_data(disease)
+                ti > length(md.results[:n_infected].values) && continue
+
+                n_sus = Int(sum(gpu_dis.susceptible))
+                n_inf = Int(sum(gpu_dis.infected))
+
+                md.results[:n_susceptible][ti] = Float64(n_sus)
+                md.results[:n_infected][ti] = Float64(n_inf)
+
+                if gpu_dis.recovered !== nothing
+                    n_rec = Int(sum(gpu_dis.recovered))
+                    md.results[:n_recovered][ti] = Float64(n_rec)
+                end
+
+                if gpu_dis.exposed !== nothing
+                    n_exp = Int(sum(gpu_dis.exposed))
+                    md.results[:n_exposed][ti] = Float64(n_exp)
+                end
+
+                n_total = Float64(n_alive)
+                md.results[:prevalence][ti] = n_total > 0.0 ? n_inf / n_total : 0.0
+            end
+            # No sync_to_gpu! needed — GPU state unchanged
+        end
+
+        # Step 14: Module lifecycle — finish_step
         for (_, mod) in Starsim.all_modules(sim)
             Starsim.finish_step!(mod, sim)
         end
     end
 
+    # Final GPU→CPU sync
     Starsim.to_cpu(gsim)
 
     # Finalize all modules
