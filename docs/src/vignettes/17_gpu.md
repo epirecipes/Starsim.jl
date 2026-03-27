@@ -1,8 +1,9 @@
-# GPU Acceleration with Metal.jl
+# GPU Acceleration
 Simon Frost
 
 - [Overview](#overview)
 - [Architecture](#architecture)
+- [Supported backends](#supported-backends)
 - [Supported diseases](#supported-diseases)
 - [Usage](#usage)
 - [Performance](#performance)
@@ -11,10 +12,10 @@ Simon Frost
 
 ## Overview
 
-Starsim.jl provides GPU acceleration via Apple Silicon's Metal.jl through
-the `StarsimMetalExt` package extension (~1,700 lines). Disease dynamics
-(transmission, recovery, state transitions) run on GPU while structurally
-dynamic operations (network rewiring, demographics) remain on CPU.
+Starsim.jl provides GPU acceleration through three package extensions
+supporting all major GPU platforms. Disease dynamics (transmission,
+recovery, state transitions) run on GPU while structurally dynamic
+operations (network rewiring, demographics) remain on CPU.
 
 ## Architecture
 
@@ -36,6 +37,27 @@ The GPU extension uses a **hybrid CPU/GPU** approach:
 
 The GPU loop follows the exact same 16-step integration order as the CPU,
 ensuring identical disease dynamics.
+
+## Supported backends
+
+| Backend | Extension | GPU type | Package | Platform |
+|---------|-----------|----------|---------|----------|
+| Metal   | `StarsimMetalExt` | `MtlVector` | [Metal.jl](https://github.com/JuliaGPU/Metal.jl) | Apple Silicon (macOS) |
+| CUDA    | `StarsimCUDAExt`  | `CuVector`  | [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) | NVIDIA GPUs |
+| ROCm    | `StarsimAMDGPUExt`| `ROCVector` | [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) | AMD GPUs |
+
+Extensions load automatically when the corresponding GPU package is
+imported alongside Starsim:
+
+``` julia
+using Starsim, Metal   # Apple Silicon
+using Starsim, CUDA    # NVIDIA
+using Starsim, AMDGPU  # AMD
+```
+
+All three backends share the same API (`run_gpu!`, `to_gpu`, `to_cpu`,
+etc.) and implement identical algorithms. All use Float32/UInt8 on GPU
+for maximum performance.
 
 ## Supported diseases
 
@@ -123,9 +145,11 @@ all three disease types (SIR, SIS, SEIR) over 30 seeds.
 
 ## Summary
 
-The Metal.jl GPU extension provides a working GPU backend for SIR, SIS,
-and SEIR disease models. While Apple Silicon's shared memory architecture
-and Julia's fast CPU code limit GPU speedups on this platform, the
-architecture is designed to transfer to discrete GPU platforms (CUDA.jl)
-where larger speedups are expected. The GPU path produces statistically
-identical results to the CPU path (r > 0.999).
+Starsim.jl provides GPU acceleration for SIR, SIS, and SEIR disease
+models across three platforms: Apple Silicon (Metal.jl), NVIDIA (CUDA.jl),
+and AMD (AMDGPU.jl). All backends share the same API and implement
+identical algorithms. Metal benchmarks on Apple Silicon show GPU overtaking
+CPU at ~5M agents with cached edges; discrete NVIDIA/AMD GPUs with
+dedicated VRAM are expected to show larger speedups at smaller agent
+counts. The GPU path produces statistically identical results to the CPU
+path (r > 0.999).
