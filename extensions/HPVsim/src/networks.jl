@@ -194,14 +194,35 @@ function Starsim.init_pre!(net::HPVSexualNet, sim)
 
     net._last_initialized_uid = sim.people.next_uid - 1
     md.initialized = true
-
-    # Don't form partnerships here — ages may be reassigned by demographics init_post!
-    # Partnerships will form at the first step! call when ages are correct.
     return net
 end
 
 # Fixed layer ordering: marital first, then casual (matching Python hpvsim)
 const LAYER_ORDER = [:m, :c]
+
+"""Create initial partnerships after demographics has set final ages.
+
+Python hpvsim calls make_contacts() during make_people(), creating partnerships
+BEFORE the first simulation step. This init_post! matches that behavior:
+demographics.init_pre! has already set ages from the location pyramid, so
+debut filtering and age-assortative matching use the correct age distribution.
+"""
+function Starsim.init_post!(net::HPVSexualNet, sim)
+    now = Float64(sim.pars.start)
+    dt  = sim.pars.dt
+
+    for lk in LAYER_ORDER
+        haskey(net.layers, lk) || continue
+        _form_new_partnerships!(net, lk, sim.people, now, dt)
+    end
+    _rebuild_edges!(net, sim.people)
+    net.initial_partnerships_formed = true
+
+    if get(ENV, "HPVSIM_DEBUG_NET", "") == "1"
+        _debug_count(net, sim.people, "INIT_POST", now)
+    end
+    return net
+end
 
 function Starsim.step!(net::HPVSexualNet, sim)
     now = Starsim.now(sim.t)
@@ -209,21 +230,6 @@ function Starsim.step!(net::HPVSexualNet, sim)
 
     # Ensure arrays are large enough for any newly born agents and init their properties
     _grow_for_new_agents!(net, sim.people)
-
-    if !net.initial_partnerships_formed
-        # Python hpvsim creates partnerships during make_people() and again at step 0.
-        # Julia forms once here, then the normal dissolve+create cycle handles subsequent steps.
-        for lk in LAYER_ORDER
-            haskey(net.layers, lk) || continue
-            _form_new_partnerships!(net, lk, sim.people, now, dt)
-        end
-        _rebuild_edges!(net, sim.people)
-        net.initial_partnerships_formed = true
-        if get(ENV, "HPVSIM_DEBUG_NET", "") == "1"
-            _debug_count(net, sim.people, "INIT", now)
-        end
-        return net
-    end
 
     # Match Python: dissolve ALL layers first, then form ALL layers.
     # Cross-layer eligibility depends on partnership state at formation time.
@@ -345,14 +351,20 @@ function _dissolve_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
     isempty(layer) && return
 
     alive_raw = people.alive.raw
+    ti_dead_raw = people.ti_dead.raw
     n = length(layer)
     to_remove = falses(n)
     cur = net.current_partners[lk]
 
     @inbounds for i in 1:n
-        if !alive_raw[layer.p1[i]] || !alive_raw[layer.p2[i]] || now >= layer.end_time[i]
+        p1 = layer.p1[i]; p2 = layer.p2[i]
+        # Dissolve if partner died (alive=false), scheduled to die this step (ti_dead set),
+        # or duration expired. Python sets alive=false before dissolution; we check ti_dead
+        # to catch agents scheduled to die this step who haven't been marked dead yet.
+        dead_p1 = !alive_raw[p1] || ti_dead_raw[p1] < Inf
+        dead_p2 = !alive_raw[p2] || ti_dead_raw[p2] < Inf
+        if dead_p1 || dead_p2 || now >= layer.end_time[i]
             to_remove[i] = true
-            p1 = layer.p1[i]; p2 = layer.p2[i]
             if p1 <= length(cur); cur[p1] = max(0, cur[p1] - 1); end
             if p2 <= length(cur); cur[p2] = max(0, cur[p2] - 1); end
         end
@@ -377,6 +389,7 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
     cur = net.current_partners[lk]
     des = net.desired_partners[lk]
     debut_ages = net.debut_ages
+    ti_dead_raw = people.ti_dead.raw
 
     # Cross-layer concurrency: check if agent has partners in OTHER layers
     other_layers = [olK for olK in keys(net.layers) if olK != lk]
@@ -386,6 +399,8 @@ function _form_new_partnerships!(net::HPVSexualNet, lk::Symbol, people::Starsim.
     m_eligible_all = Int[]
 
     @inbounds for u in active
+        # Skip agents scheduled to die (Python removes them before partnership formation)
+        ti_dead_raw[u] < Inf && continue
         age = people.age.raw[u]
         u > length(debut_ages) && continue
         age < debut_ages[u] && continue

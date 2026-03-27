@@ -487,6 +487,9 @@ function _step_duration_model!(d::HPVGenotype, sim, active::Vector{Int}, ti::Int
                 d.cin3.raw[u] = false
                 d.cancerous.raw[u] = true
                 d.ti_cancer.raw[u] = ti_f
+                # Match Python: cancer agents are no longer infectious
+                d.infection.infected.raw[u]    = false
+                d.infection.susceptible.raw[u] = false
                 continue
             end
 
@@ -943,9 +946,9 @@ function Starsim.update_results!(d::HPVGenotype, sim)
     md.results[:n_cleared][ti]     = Float64(n_cl)
 
     n_total = Float64(length(active))
-    # HPV prevalence excludes cancerous (matching Python: cancerous → inactive, not infectious)
-    n_infectious = Float64(n_inf - n_ca)
-    md.results[:prevalence][ti] = n_total > 0.0 ? n_infectious / n_total : 0.0
+    # After cancer fix, infected=false for cancer agents, so n_inf already excludes them.
+    # No need to subtract n_ca (that was only needed before the cancer fix).
+    md.results[:prevalence][ti] = n_total > 0.0 ? Float64(n_inf) / n_total : 0.0
     # CIN prevalence uses female denominator (matching Python: n_cin / alive_females)
     n_cin_total = Float64(n_c1 + n_c2 + n_c3)
     n_f = Float64(n_female)

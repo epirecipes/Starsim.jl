@@ -256,7 +256,7 @@ function _apply_death_rates!(d::HPVLocationDemographics, sim, year::Float64)
         end
     end
 
-    # Remove dead agents
+    # Remove dead agents — schedule for removal at step_die!
     if !isempty(death_uids)
         ti = Starsim.module_data(d).t.ti
         Starsim.request_death!(sim.people, Starsim.UIDs(death_uids), ti)
