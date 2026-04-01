@@ -240,6 +240,9 @@ function run!(sim::Sim; verbose::Union{Int, Nothing}=nothing, backend::Symbol=:c
 
     if backend in (:gpu, :auto, :metal, :cuda, :amdgpu)
         return run_gpu!(sim; verbose=v, backend=backend)
+    elseif backend != :cpu
+        valid = join([":cpu", ":gpu", ":auto", ":metal", ":cuda", ":amdgpu"], ", ")
+        error("Unknown backend `:$backend`. Valid backends are $valid.")
     end
 
     if !sim.initialized

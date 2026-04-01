@@ -803,6 +803,51 @@ using Statistics: mean
         end
     end
 
+    @testset "GPU backend resolution" begin
+        sim = Sim(
+            n_agents = 50,
+            networks = RandomNet(n_contacts=2),
+            diseases = SIR(beta=0.05, dur_inf=5.0, init_prev=0.05),
+            dt = 1.0,
+            stop = 2.0,
+            verbose = 0,
+        )
+
+        loaded = Starsim._loaded_gpu_backends()
+        if isempty(loaded)
+            err = try
+                run!(sim; backend=:gpu, verbose=0)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ErrorException
+            @test occursin("Load one of", sprint(showerror, err))
+
+            for backend in (:metal, :cuda, :amdgpu)
+                berr = try
+                    run!(sim; backend=backend, verbose=0)
+                    nothing
+                catch e
+                    e
+                end
+                @test berr isa ErrorException
+                @test occursin("requires loading", sprint(showerror, berr))
+            end
+        else
+            @test !isempty(loaded)
+        end
+
+        uerr = try
+            run!(sim; backend=:definitely_not_a_backend, verbose=0)
+            nothing
+        catch e
+            e
+        end
+        @test uerr isa ErrorException
+        @test occursin("Unknown backend", sprint(showerror, uerr))
+    end
+
     @testset "Makie extension (stubs)" begin
         sim = Sim(n_agents=200, diseases=SIR(beta=0.05, dur_inf=10.0, init_prev=0.1),
                   networks=RandomNet(n_contacts=4), start=0.0, stop=10.0, rand_seed=1)
