@@ -116,11 +116,17 @@ function plot_comparison end
 """Compute sensitivity via Enzyme reverse-mode AD (Enzyme extension)."""
 function enzyme_sensitivity end
 
-"""Convert simulation state arrays to GPU (Metal extension)."""
+"""Convert simulation state arrays to GPU using an available backend extension."""
 function to_gpu end
 
-"""Convert simulation state arrays back to CPU (Metal extension)."""
+"""Backend-specific GPU upload implementation provided by GPU extensions."""
+function _to_gpu_backend end
+
+"""Convert simulation state arrays back to CPU (GPU extensions)."""
 function to_cpu end
+
+"""Backend-specific GPU run implementation provided by GPU extensions."""
+function _run_gpu_backend! end
 
 """Plot simulation results using Makie (Makie extension)."""
 function plot_sim end
@@ -151,7 +157,7 @@ function epi_uwd end
 
 export plot_sim, plot_disease, plot_comparison
 export sensitivity, sensitivity_timeseries, gradient_objective, build_optproblem, run_optimization!
-export enzyme_sensitivity, to_gpu, to_cpu, plot_sim, plot_disease, plot_comparison
+export enzyme_sensitivity, to_gpu, to_cpu, run_gpu!, plot_sim, plot_disease, plot_comparison
 export EpiNet, OpenEpiNet, EpiSharer, compose_epi, to_sim, epi_uwd
 
 end # module Starsim

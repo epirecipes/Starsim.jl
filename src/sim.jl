@@ -219,16 +219,17 @@ Run the simulation. Initializes first if needed. Returns `sim` for chaining.
 - `verbose::Union{Int, Nothing}` — override the sim's verbosity level
 - `backend::Symbol` — execution backend:
   - `:cpu` (default) — standard CPU execution
-  - `:gpu` — Metal GPU with fused kernels and cached static edges.
-    Requires `using Metal` to load the GPU extension. Automatically handles
-    `to_gpu`, `cache_edges!`, the integration loop, and `to_cpu`.
+  - `:gpu` / `:auto` — use the single loaded GPU backend extension
+  - `:metal` — Apple Silicon GPU backend (requires `using Metal`)
+  - `:cuda` — NVIDIA GPU backend (requires `using CUDA`)
+  - `:amdgpu` — AMD GPU backend (requires `using AMDGPU`)
 
 # Examples
 ```julia
 # CPU (default)
 sim = Sim(diseases=SIR(beta=0.1)) |> run!
 
-# GPU — same sim, just add backend=:gpu
+# GPU — choose automatically if exactly one backend is loaded
 sim = Sim(n_agents=1_000_000, diseases=SIR(beta=0.05),
           networks=RandomNet(n_contacts=10))
 run!(sim; backend=:gpu)
@@ -237,11 +238,8 @@ run!(sim; backend=:gpu)
 function run!(sim::Sim; verbose::Union{Int, Nothing}=nothing, backend::Symbol=:cpu)
     v = verbose === nothing ? sim.pars.verbose : verbose
 
-    if backend == :gpu
-        if !applicable(run_gpu!, sim)
-            error("GPU backend requires a GPU extension. Load Metal.jl first: `using Metal`")
-        end
-        return run_gpu!(sim; verbose=v)
+    if backend in (:gpu, :auto, :metal, :cuda, :amdgpu)
+        return run_gpu!(sim; verbose=v, backend=backend)
     end
 
     if !sim.initialized
@@ -272,15 +270,80 @@ function run!(sim::Sim; verbose::Union{Int, Nothing}=nothing, backend::Symbol=:c
     return sim
 end
 
-"""
-    run_gpu!(sim; verbose=1)
+const GPU_EXTENSIONS = Dict(
+    :metal  => (:StarsimMetalExt,  "Metal.jl"),
+    :cuda   => (:StarsimCUDAExt,   "CUDA.jl"),
+    :amdgpu => (:StarsimAMDGPUExt, "AMDGPU.jl"),
+)
 
-GPU backend for `run!`. Implemented by the Metal GPU extension.
-Raises an error if no GPU extension is loaded.
+_gpu_backend_names() = collect(keys(GPU_EXTENSIONS))
 
-Load the extension with `using Metal` before calling `run!(sim; backend=:gpu)`.
+function _loaded_gpu_backends()
+    loaded = Symbol[]
+    for backend in _gpu_backend_names()
+        extname, _ = GPU_EXTENSIONS[backend]
+        Base.get_extension(Starsim, extname) === nothing || push!(loaded, backend)
+    end
+    return loaded
+end
+
+function _require_gpu_backend(backend::Symbol)
+    if backend in (:gpu, :auto)
+        loaded = _loaded_gpu_backends()
+        isempty(loaded) && error(
+            "GPU backend requires a loaded GPU package. Load one of: `using Metal`, `using CUDA`, or `using AMDGPU`."
+        )
+        length(loaded) == 1 && return only(loaded)
+        choices = join([":$name" for name in loaded], ", ")
+        error("Multiple GPU backends are loaded ($choices). Select one explicitly with `backend=:metal`, `:cuda`, or `:amdgpu`.")
+    elseif haskey(GPU_EXTENSIONS, backend)
+        extname, pkgname = GPU_EXTENSIONS[backend]
+        Base.get_extension(Starsim, extname) === nothing &&
+            error("GPU backend `:$backend` requires loading $pkgname first: `using $(replace(pkgname, ".jl" => ""))`")
+        return backend
+    else
+        valid = join([":cpu", ":gpu", ":auto", ":metal", ":cuda", ":amdgpu"], ", ")
+        error("Unknown backend `:$backend`. Valid backends are $valid.")
+    end
+end
+
 """
-function run_gpu! end
+    to_gpu(sim; backend=:auto)
+
+Convert an initialized simulation to GPU-backed arrays using the selected
+GPU extension. With `backend=:auto` (or `:gpu`), exactly one loaded GPU
+backend must be available.
+"""
+function to_gpu(sim::Sim; backend::Symbol=:auto)
+    resolved = _require_gpu_backend(backend)
+    return _to_gpu_backend(sim, Val(resolved))
+end
+
+function _to_gpu_backend(sim::Sim, ::Val{B}) where {B}
+    error("GPU backend `:$B` is loaded but did not provide a `to_gpu` implementation.")
+end
+
+"""
+    to_cpu(sim)
+
+No-op on CPU simulations; GPU extensions provide `to_cpu(::GPUSim)`.
+"""
+to_cpu(sim::Sim) = sim
+
+"""
+    run_gpu!(sim; verbose=1, backend=:auto, kwargs...)
+
+Run a simulation on the selected GPU backend. With `backend=:auto` (or
+`:gpu`), exactly one loaded GPU backend must be available.
+"""
+function run_gpu!(sim::Sim; verbose::Int=1, backend::Symbol=:auto, kwargs...)
+    resolved = _require_gpu_backend(backend)
+    return _run_gpu_backend!(sim, Val(resolved); verbose=verbose, kwargs...)
+end
+
+function _run_gpu_backend!(sim::Sim, ::Val{B}; kwargs...) where {B}
+    error("GPU backend `:$B` is loaded but did not provide a `run_gpu!` implementation.")
+end
 
 """
     reset!(sim::Sim)

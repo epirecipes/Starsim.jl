@@ -60,7 +60,7 @@ Starsim.OPTIONS.slot_scale = 0.0  # Reset
 
 ## GPU CRN support
 
-When CRN is enabled and the Metal GPU extension is loaded, `gpu_step_fused!`
+When CRN is enabled and a GPU extension is loaded, `gpu_step_fused!`
 automatically uses CRN-aware kernels:
 
 - **Deterministic seeding**: Per-agent seeds derived from `sim.pars.rand_seed` and
@@ -78,7 +78,7 @@ sim = Sim(n_agents=100_000, diseases=SIR(beta=0.3, dur_inf=0.05, init_prev=0.01)
 init!(sim)
 for (_, net) in sim.networks; Starsim.step!(net, sim); end
 
-gsim = to_gpu(sim)           # CRN mode auto-detected
+gsim = to_gpu(sim; backend=:metal)  # CRN mode auto-detected
 cache_edges!(gsim)
 gpu_step_fused!(gsim, :sir; current_ti=1)  # Uses CRN kernels
 

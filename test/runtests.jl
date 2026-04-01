@@ -726,6 +726,83 @@ using Statistics: mean
         @test sim4.complete
     end
 
+    @testset "GPU backends (conditional smoke tests)" begin
+        function try_using_gpu(pkg::Symbol)
+            try
+                Base.eval(Main, Expr(:toplevel, Expr(:using, pkg)))
+                return true
+            catch
+                return false
+            end
+        end
+
+        function gpu_backend_usable(pkg::Symbol)
+            try_using_gpu(pkg) || return false
+            mod = getproperty(Main, pkg)
+            if isdefined(mod, :functional)
+                return getproperty(mod, :functional)()
+            else
+                return true
+            end
+        end
+
+        function run_gpu_smoke(backend::Symbol)
+            sim = Sim(
+                n_agents = 500,
+                networks = RandomNet(n_contacts=5),
+                diseases = SIR(beta=0.05, dur_inf=10.0, init_prev=0.05),
+                dt = 1.0,
+                stop = 20.0,
+                rand_seed = 42,
+                verbose = 0,
+            )
+            run!(sim; verbose=0, backend=backend)
+            @test sim.complete
+            prev = get_result(sim, :sir, :prevalence)
+            @test length(prev) == sim.t.npts
+            @test all(isfinite, prev)
+
+            sim2 = Sim(
+                n_agents = 200,
+                networks = RandomNet(n_contacts=4),
+                diseases = SIR(beta=0.05, dur_inf=8.0, init_prev=0.05),
+                dt = 1.0,
+                stop = 5.0,
+                rand_seed = 7,
+                verbose = 0,
+            )
+            init!(sim2)
+            gsim = to_gpu(sim2; backend=backend)
+            sim2_cpu = to_cpu(gsim)
+            @test sim2_cpu === sim2
+            @test count(sim2.people.alive.raw) == sim2.pars.n_agents
+        end
+
+        @testset "Metal" begin
+            if Sys.isapple() && gpu_backend_usable(:Metal)
+                run_gpu_smoke(:metal)
+            else
+                @test_skip "Metal backend unavailable"
+            end
+        end
+
+        @testset "CUDA" begin
+            if gpu_backend_usable(:CUDA)
+                run_gpu_smoke(:cuda)
+            else
+                @test_skip "CUDA backend unavailable"
+            end
+        end
+
+        @testset "AMDGPU" begin
+            if gpu_backend_usable(:AMDGPU)
+                run_gpu_smoke(:amdgpu)
+            else
+                @test_skip "AMDGPU backend unavailable"
+            end
+        end
+    end
+
     @testset "Makie extension (stubs)" begin
         sim = Sim(n_agents=200, diseases=SIR(beta=0.05, dur_inf=10.0, init_prev=0.1),
                   networks=RandomNet(n_contacts=4), start=0.0, stop=10.0, rand_seed=1)

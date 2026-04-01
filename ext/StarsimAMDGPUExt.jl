@@ -227,7 +227,7 @@ function _seir_to_gpu(d::Starsim.SEIR)
 end
 
 """
-    to_gpu(sim::Starsim.Sim) → GPUSim
+    to_gpu(sim; backend=:amdgpu) → GPUSim
 
 Copy a CPU simulation's state arrays to AMD GPU memory via AMDGPU.jl.
 
@@ -238,7 +238,7 @@ Network edge lists are NOT copied (they are rebuilt each timestep on CPU).
 Currently supports `SIR`, `SIS`, and `SEIR` diseases. Unsupported disease types
 are skipped with a warning.
 """
-function Starsim.to_gpu(sim::Starsim.Sim)
+function Starsim._to_gpu_backend(sim::Starsim.Sim, ::Val{:amdgpu})
     sim.initialized || error("Sim must be initialized before to_gpu(). Call init!(sim) first.")
 
     gpu_people = _people_to_gpu(sim.people)
@@ -417,7 +417,6 @@ function Starsim.to_cpu(gsim::GPUSim)
 end
 
 # No-op when the sim is already on CPU
-Starsim.to_cpu(sim::Starsim.Sim) = sim
 
 # ============================================================================
 # AMDGPU kernels — transmission
@@ -1235,10 +1234,17 @@ function gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
     elseif disease isa Starsim.SIS
         dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
 
-        @roc groupsize=ROCM_THREADS gridsize=ROCM_THREADS*groups_a _sis_recovery_kernel!(
-            gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_infected,
-            ti_f, dur_inf_ts, n_agents,
-        )
+        if gpu_dis.ti_recovered !== nothing
+            @roc groupsize=ROCM_THREADS gridsize=ROCM_THREADS*groups_a _sis_recovery_ti_kernel!(
+                gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_recovered,
+                ti_f, n_agents,
+            )
+        else
+            @roc groupsize=ROCM_THREADS gridsize=ROCM_THREADS*groups_a _sis_recovery_kernel!(
+                gpu_dis.infected, gpu_dis.susceptible, gpu_dis.ti_infected,
+                ti_f, dur_inf_ts, n_agents,
+            )
+        end
 
         if beta_dt_f32 > Float32(0)
             # Snapshot infected/susceptible for synchronous transmission
@@ -1283,9 +1289,12 @@ function gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
             AMDGPU.synchronize()
 
             # Apply infections
+            cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, Int(n_agents))
+            copyto!(gsim.jitter_buf, 1, cpu_dur, 1, Int(n_agents))
             @roc groupsize=ROCM_THREADS gridsize=ROCM_THREADS*groups_a _apply_infections_sis_kernel!(
                 gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
-                gsim.new_infected, ti_f, n_agents,
+                gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+                gsim.jitter_buf, n_agents,
             )
         end
     end
@@ -1433,9 +1442,13 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
             gsim.jitter_buf, n_agents,
         )
     elseif disease isa Starsim.SIS
+        dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
+        cpu_dur = _sample_recovery_durations(disease, dur_inf_ts, gpu_dis.n)
+        copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
         @roc groupsize=ROCM_THREADS gridsize=ROCM_THREADS*groups_a _apply_infections_sis_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
-            gsim.new_infected, ti_f, n_agents,
+            gpu_dis.ti_recovered, gsim.new_infected, ti_f,
+            gsim.jitter_buf, n_agents,
         )
     end
 
@@ -1518,7 +1531,7 @@ function _gpu_sis_immunity_waning!(gsim::GPUSim, sim, disease_names)
 end
 
 """
-    Starsim.run_gpu!(sim::Sim; verbose::Int=1, cache_edges::Bool=false)
+    Starsim.run_gpu!(sim::Sim; verbose::Int=1, backend=:amdgpu, cache_edges::Bool=false)
 
 GPU backend for `run!`. Called automatically when `run!(sim; backend=:gpu)`.
 
@@ -1545,7 +1558,7 @@ sim = Sim(n_agents=1_000_000, diseases=[SIR(beta=0.05, dur_inf=10.0)],
 run!(sim; backend=:gpu)
 ```
 """
-function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=false)
+function Starsim._run_gpu_backend!(sim::Starsim.Sim, ::Val{:amdgpu}; verbose::Int=1, cache_edges::Bool=false)
     if !sim.initialized
         Starsim.init!(sim)
     end
@@ -1558,7 +1571,7 @@ function Starsim.run_gpu!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=fa
                 "dt=$(sim.pars.dt), device=$(AMDGPU.device()))")
     end
 
-    gsim = Starsim.to_gpu(sim)
+    gsim = Starsim._to_gpu_backend(sim, Val(:amdgpu))
     disease_names = collect(keys(sim.diseases))
 
     # For cached-edge mode, generate edges once and upload

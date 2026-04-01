@@ -79,7 +79,7 @@ sim = Sim(
     networks = [RandomNet(n_contacts=10)],
     stop = 50.0, dt = 1.0,
 )
-Starsim.run_gpu!(sim; verbose=1)
+Starsim.run_gpu!(sim; verbose=1, backend=:metal)
 
 # Static network mode (edges generated once, cached on GPU)
 sim2 = Sim(
@@ -88,7 +88,7 @@ sim2 = Sim(
     networks = [RandomNet(n_contacts=10)],
     stop = 50.0, dt = 1.0,
 )
-Starsim.run_gpu!(sim2; verbose=1, cache_edges=true)
+Starsim.run_gpu!(sim2; verbose=1, backend=:metal, cache_edges=true)
 ```
 
 ## Performance
@@ -123,8 +123,8 @@ less impactful than on platforms with weaker CPUs or discrete GPUs. The
 GPU path is most useful for:
 
 - Very large simulations (1M+ agents) with static networks
-- Future CUDA.jl support on NVIDIA GPUs (where discrete GPU memory
-  bandwidth dominates)
+- CUDA.jl / AMDGPU.jl on discrete GPUs (where dedicated VRAM and higher
+  memory bandwidth should improve the crossover point)
 - Demonstrating the GPU-ready architecture
 
 **Correctness**: GPU vs CPU mean trajectory correlation r > 0.999 for
@@ -134,9 +134,9 @@ all three disease types (SIR, SIS, SEIR) over 30 seeds.
 
 | Function | Description |
 |----------|-------------|
-| `to_gpu(sim)` | Convert initialized Sim to GPUSim |
+| `to_gpu(sim; backend=:auto)` | Convert initialized Sim to GPUSim |
 | `to_cpu(gsim)` | Copy GPU state back to CPU Sim |
-| `run_gpu!(sim)` | Full GPU simulation lifecycle |
+| `run_gpu!(sim; backend=:auto)` | Full GPU simulation lifecycle |
 | `gpu_step_state!(gsim, :sir; current_ti=ti)` | Recovery transitions on GPU |
 | `gpu_transmit!(gsim, :sir; current_ti=ti)` | Transmission with edge upload |
 | `cache_edges!(gsim)` | Upload edges once for static networks |
