@@ -868,6 +868,14 @@ using Statistics: mean
                 gpu_disease = sim_gpu.diseases[disease_name]
                 @test cpu_disease.infection.infected.raw == gpu_disease.infection.infected.raw
                 @test cpu_disease.ti_recovered.raw ≈ gpu_disease.ti_recovered.raw atol=1e-6
+
+                 if cpu_disease isa SEIR
+                     @test get_result(sim_cpu, disease_name, :n_exposed) == get_result(sim_gpu, disease_name, :n_exposed)
+                     @test get_result(sim_cpu, disease_name, :n_recovered) == get_result(sim_gpu, disease_name, :n_recovered)
+                     @test cpu_disease.exposed.raw == gpu_disease.exposed.raw
+                     @test cpu_disease.recovered.raw == gpu_disease.recovered.raw
+                     @test cpu_disease.ti_exposed.raw ≈ gpu_disease.ti_exposed.raw atol=1e-6
+                 end
             finally
                 Starsim.OPTIONS.slot_scale = old_slot_scale
             end
@@ -879,6 +887,7 @@ using Statistics: mean
                 run_gpu_reproducibility(:metal)
                 run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
             else
                 @test_skip "Metal backend unavailable"
             end
@@ -890,6 +899,7 @@ using Statistics: mean
                 run_gpu_reproducibility(:cuda)
                 run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
             else
                 @test_skip "CUDA backend unavailable"
             end
@@ -901,6 +911,7 @@ using Statistics: mean
                 run_gpu_reproducibility(:amdgpu)
                 run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
             else
                 @test_skip "AMDGPU backend unavailable"
             end
