@@ -852,14 +852,18 @@ using Statistics: mean
             )
         end
 
-        function run_cpu_gpu_parity(backend::Symbol, disease_name::Symbol, disease)
+        function run_cpu_gpu_parity(backend::Symbol, disease_name::Symbol, disease; cache_edges::Bool=false)
             old_slot_scale = Starsim.OPTIONS.slot_scale
             Starsim.OPTIONS.slot_scale = 5.0
             try
                 sim_cpu = make_recovery_parity_sim(disease)
                 sim_gpu = make_recovery_parity_sim(deepcopy(disease))
                 run!(sim_cpu; verbose=0)
-                run!(sim_gpu; verbose=0, backend=backend)
+                if cache_edges
+                    run_gpu!(sim_gpu; verbose=0, backend=backend, cache_edges=true)
+                else
+                    run!(sim_gpu; verbose=0, backend=backend)
+                end
 
                 @test get_result(sim_cpu, disease_name, :n_infected) == get_result(sim_gpu, disease_name, :n_infected)
                 @test get_result(sim_cpu, disease_name, :prevalence) == get_result(sim_gpu, disease_name, :prevalence)
@@ -888,6 +892,9 @@ using Statistics: mean
                 run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
                 run_cpu_gpu_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
             else
                 @test_skip "Metal backend unavailable"
             end
@@ -900,6 +907,9 @@ using Statistics: mean
                 run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
                 run_cpu_gpu_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
             else
                 @test_skip "CUDA backend unavailable"
             end
@@ -912,6 +922,9 @@ using Statistics: mean
                 run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
                 run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
                 run_cpu_gpu_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
             else
                 @test_skip "AMDGPU backend unavailable"
             end

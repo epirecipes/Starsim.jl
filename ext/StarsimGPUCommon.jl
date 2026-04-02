@@ -1385,53 +1385,112 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
     gsim.cached_edges || error("Edges not cached. Call cache_edges!(gsim) first.")
 
     gpu_dis = gsim.diseases[disease_name]
+    disease = gsim.sim.diseases[disease_name]
     n_agents = Int32(gpu_dis.n)
     ti_f = Float32(current_ti)
     n_edges = gsim.cached_n_edges
     n_edges_i32 = Int32(n_edges)
     groups_e = cld(n_edges, GPU_THREADS)
+    groups_a = cld(n_agents, GPU_THREADS)
 
     beta_dt_f32 = get(gsim.cached_beta_dt, disease_name, Float32(0))
     beta_dt_f32 == Float32(0) && return gsim
+
+    if gsim.crn_mode
+        ti_jump = UInt32(current_ti) * CRN_DT_JUMP
+        @gpu_launch groups_a _crn_reset_seeds_kernel!(
+            gsim.rng_seeds_agent, gsim.rng_seeds_base, ti_jump, n_agents,
+        )
+    else
+        _ensure_rng_seed_capacity!(gsim, n_edges)
+    end
 
     # Snapshot infected/susceptible for synchronous transmission
     copyto!(gsim.snap_infected, gpu_dis.infected)
     copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
 
     # Reset new_infected
-    fill!(gsim.new_infected, 0x00)
+    gpu_fill!(gsim.new_infected, 0x00)
 
-    # Only need to upload random numbers (CPU → GPU)
-    cpu_rng = rand(Float32, n_edges)
-    copyto!(gsim.rng_buf, 1, cpu_rng, 1, n_edges)
-
-    # Forward transmission — reads from snapshots
-    @gpu_launch groups_e _transmission_kernel!(
-        gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
-        gpu_dis.rel_trans, gpu_dis.rel_sus,
-        gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
-        beta_dt_f32, gsim.rng_buf, n_edges_i32,
-    )
-
-    # Reverse direction
-    if gsim.cached_bidirectional
-        cpu_rng_rev = rand(Float32, n_edges)
-        copyto!(gsim.rng_buf, 1, cpu_rng_rev, 1, n_edges)
-        @gpu_launch groups_e _transmission_kernel!(
-            gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
-            gpu_dis.rel_trans, gpu_dis.rel_sus,
-            gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
-            beta_dt_f32, gsim.rng_buf, n_edges_i32,
-        )
+    if gsim.crn_mode
+        if disease isa Starsim.SIS
+            @gpu_launch groups_e _crn_fused_transmit_sis_kernel!(
+                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                gpu_dis.rel_trans, gpu_dis.rel_sus,
+                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                beta_dt_f32, gsim.rng_seeds_agent,
+                n_edges_i32,
+            )
+            if gsim.cached_bidirectional
+                @gpu_launch groups_e _crn_fused_transmit_sis_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds_agent,
+                    n_edges_i32,
+                )
+            end
+        else
+            @gpu_launch groups_e _crn_fused_transmit_sir_kernel!(
+                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                gpu_dis.rel_trans, gpu_dis.rel_sus,
+                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                beta_dt_f32, gsim.rng_seeds_agent,
+                n_edges_i32,
+            )
+            if gsim.cached_bidirectional
+                @gpu_launch groups_e _crn_fused_transmit_sir_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds_agent,
+                    n_edges_i32,
+                )
+            end
+        end
+    else
+        if disease isa Starsim.SIS
+            @gpu_launch groups_e _fused_transmit_sis_kernel!(
+                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                gpu_dis.rel_trans, gpu_dis.rel_sus,
+                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+            )
+            if gsim.cached_bidirectional
+                @gpu_launch groups_e _fused_transmit_sis_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+                )
+            end
+        else
+            @gpu_launch groups_e _fused_transmit_sir_kernel!(
+                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                gpu_dis.rel_trans, gpu_dis.rel_sus,
+                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
+                beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+            )
+            if gsim.cached_bidirectional
+                @gpu_launch groups_e _fused_transmit_sir_kernel!(
+                    gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                    gpu_dis.rel_trans, gpu_dis.rel_sus,
+                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
+                    beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+                )
+            end
+        end
     end
 
     gpu_synchronize()
 
     # Apply infections
-    groups_a = cld(n_agents, GPU_THREADS)
-    disease = gsim.sim.diseases[disease_name]
-
-    if disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
+    if disease isa Starsim.SEIR && gpu_dis.exposed !== nothing
+        @gpu_launch groups_a _apply_exposures_seir_kernel!(
+            gpu_dis.susceptible, gpu_dis.exposed, gpu_dis.ti_exposed,
+            gsim.new_infected, ti_f, n_agents,
+        )
+    elseif disease isa Starsim.SIR && gpu_dis.ti_recovered !== nothing
         dur_inf_ts = Float32(disease.dur_inf / gsim.sim.pars.dt)
         cpu_dur = if gsim.crn_mode
             cpu_new_infected = Array(gsim.new_infected)[1:gpu_dis.n]
