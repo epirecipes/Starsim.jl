@@ -30,6 +30,10 @@ Starsim.OPTIONS.slot_scale = 5.0  # Enable CRN with slot scale factor 5
 5. **Pairwise XOR for transmission**: Edge-level random numbers use
    `xor(u_i*u_j, u_i-u_j) / typemax(UInt64)` for CRN-safe pairwise draws.
 
+6. **Slot-indexed recovery durations**: Infection prognosis draws reset per
+   timestep and index by agent slot, so recovery times do not depend on the
+   order in which infections are processed.
+
 ## Example: comparing scenarios
 
 ```julia
@@ -65,10 +69,14 @@ automatically uses CRN-aware kernels:
 
 - **Deterministic seeding**: Per-agent seeds derived from `sim.pars.rand_seed` and
   agent slots via Knuth multiplicative hashing
-- **Per-timestep reset**: Seeds reset to `base + ti * 1000` each timestep, ensuring
-  order-independence within a timestep
+- **Per-timestep reset**: Seeds reset to `base + ti * 1000` each timestep
+- **Stateless pairwise draws**: Each edge draw is derived from the source/target
+  timestep seeds without mutating shared GPU RNG state, so repeated runs with the
+  same backend and seed are deterministic
+- **Recovery-duration parity**: Recovery times are sampled through the same
+  slot-indexed CRN helper used by the CPU path
 - **Pairwise XOR combining**: Transmission draws combine source and target agent
-  RNG streams, matching the CPU `MultiRandom.combine_rvs` logic
+  RNG streams, matching the CPU `MultiRandom.combine_rvs` structure
 
 ```julia
 Starsim.OPTIONS.slot_scale = 5.0
@@ -84,3 +92,13 @@ gpu_step_fused!(gsim, :sir; current_ti=1)  # Uses CRN kernels
 
 Starsim.OPTIONS.slot_scale = 0.0  # Reset
 ```
+
+## GPU reproducibility guarantees
+
+- Repeated GPU runs with the **same backend**, `rand_seed`, and CRN setting are
+  deterministic.
+- GPU CRN preserves the slot-based structure used by the CPU path, so adding or
+  removing unrelated agents does not shift transmission draws for unaffected slots.
+- GPU and CPU runs are **not** guaranteed to be bitwise identical: GPU kernels use
+  Float32 arithmetic and backend-specific execution, so compare trajectories rather
+  than exact raw random draws across CPU and GPU.

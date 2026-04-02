@@ -2,7 +2,7 @@ using Test
 using Starsim
 using DataFrames: nrow
 using SparseArrays: nnz
-using Graphs: nv, ne
+using Graphs
 using Statistics: mean
 
 @testset "Starsim.jl" begin
@@ -385,6 +385,32 @@ using Statistics: mean
             @test sim.complete
             prev = get_result(sim, :sir, :prevalence)
             @test length(prev) > 0
+
+            sim2 = Sim(
+                n_agents = 50,
+                networks = RandomNet(n_contacts=2),
+                diseases = SIR(beta=0.05, dur_inf=10.0, init_prev=0.0),
+                dt = 1.0,
+                stop = 5.0,
+                rand_seed = 123,
+                verbose = 0,
+            )
+            init!(sim2)
+            sir = sim2.diseases[:sir]
+            uids1 = UIDs([2, 5, 11])
+            uids2 = UIDs([11, 2, 5])
+            draws1 = Starsim._sample_recovery_draws(sir, sim2, uids1, 3)
+            draws2 = Starsim._sample_recovery_draws(sir, sim2, uids2, 3)
+            map1 = Dict(uid => draws1[i] for (i, uid) in pairs(uids1.values))
+            map2 = Dict(uid => draws2[i] for (i, uid) in pairs(uids2.values))
+            @test map1 == map2
+
+            extended = UIDs([2, 5, 11, 17])
+            draws3 = Starsim._sample_recovery_draws(sir, sim2, extended, 3)
+            map3 = Dict(uid => draws3[i] for (i, uid) in pairs(extended.values))
+            @test map1[2] == map3[2]
+            @test map1[5] == map3[5]
+            @test map1[11] == map3[11]
         finally
             Starsim.OPTIONS.slot_scale = old_scale
         end
@@ -778,9 +804,81 @@ using Statistics: mean
             @test count(sim2.people.alive.raw) == sim2.pars.n_agents
         end
 
+        function gpu_prevalence_trace(backend::Symbol; crn::Bool=false)
+            old_slot_scale = Starsim.OPTIONS.slot_scale
+            Starsim.OPTIONS.slot_scale = crn ? 5.0 : 0.0
+            try
+                sim = Sim(
+                    n_agents = 400,
+                    networks = RandomNet(n_contacts=4),
+                    diseases = SIR(beta=0.05, dur_inf=8.0, init_prev=0.05),
+                    dt = 1.0,
+                    stop = 15.0,
+                    rand_seed = 123,
+                    verbose = 0,
+                )
+                run!(sim; verbose=0, backend=backend)
+                return copy(get_result(sim, :sir, :prevalence))
+            finally
+                Starsim.OPTIONS.slot_scale = old_slot_scale
+            end
+        end
+
+        function run_gpu_reproducibility(backend::Symbol)
+            prev1 = gpu_prevalence_trace(backend; crn=false)
+            prev2 = gpu_prevalence_trace(backend; crn=false)
+            @test prev1 == prev2
+
+            prev_crn_1 = gpu_prevalence_trace(backend; crn=true)
+            prev_crn_2 = gpu_prevalence_trace(backend; crn=true)
+            @test prev_crn_1 == prev_crn_2
+        end
+
+        function make_recovery_parity_sim(disease)
+            graph_fn = (n, rng) -> begin
+                g = Graphs.SimpleGraph(n)
+                Graphs.add_edge!(g, 1, 2)
+                return g
+            end
+
+            return Sim(
+                n_agents = 2,
+                networks = StaticNet(graph_fn=graph_fn, n_contacts=1),
+                diseases = disease,
+                dt = 1.0,
+                stop = 4.0,
+                rand_seed = 123,
+                verbose = 0,
+            )
+        end
+
+        function run_cpu_gpu_parity(backend::Symbol, disease_name::Symbol, disease)
+            old_slot_scale = Starsim.OPTIONS.slot_scale
+            Starsim.OPTIONS.slot_scale = 5.0
+            try
+                sim_cpu = make_recovery_parity_sim(disease)
+                sim_gpu = make_recovery_parity_sim(deepcopy(disease))
+                run!(sim_cpu; verbose=0)
+                run!(sim_gpu; verbose=0, backend=backend)
+
+                @test get_result(sim_cpu, disease_name, :n_infected) == get_result(sim_gpu, disease_name, :n_infected)
+                @test get_result(sim_cpu, disease_name, :prevalence) == get_result(sim_gpu, disease_name, :prevalence)
+
+                cpu_disease = sim_cpu.diseases[disease_name]
+                gpu_disease = sim_gpu.diseases[disease_name]
+                @test cpu_disease.infection.infected.raw == gpu_disease.infection.infected.raw
+                @test cpu_disease.ti_recovered.raw ≈ gpu_disease.ti_recovered.raw atol=1e-6
+            finally
+                Starsim.OPTIONS.slot_scale = old_slot_scale
+            end
+        end
+
         @testset "Metal" begin
             if Sys.isapple() && gpu_backend_usable(:Metal)
                 run_gpu_smoke(:metal)
+                run_gpu_reproducibility(:metal)
+                run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
             else
                 @test_skip "Metal backend unavailable"
             end
@@ -789,6 +887,9 @@ using Statistics: mean
         @testset "CUDA" begin
             if gpu_backend_usable(:CUDA)
                 run_gpu_smoke(:cuda)
+                run_gpu_reproducibility(:cuda)
+                run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
             else
                 @test_skip "CUDA backend unavailable"
             end
@@ -797,6 +898,9 @@ using Statistics: mean
         @testset "AMDGPU" begin
             if gpu_backend_usable(:AMDGPU)
                 run_gpu_smoke(:amdgpu)
+                run_gpu_reproducibility(:amdgpu)
+                run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
             else
                 @test_skip "AMDGPU backend unavailable"
             end

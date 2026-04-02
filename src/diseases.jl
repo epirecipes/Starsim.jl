@@ -24,6 +24,45 @@ function _sample_dur(dist::Symbol, mean::Float64, rng)
     end
 end
 
+"""Construct the recovery duration distribution for a disease."""
+function _recovery_dist(dist::Symbol, mean::Float64)
+    if dist === :exponential
+        return Exponential(mean)
+    else  # :lognormal (Python starsim default)
+        σ² = log(1 + (1.0 / mean)^2)
+        μ = log(mean) - σ² / 2
+        return LogNormal(μ, sqrt(σ²))
+    end
+end
+
+"""
+    _sample_recovery_draws(disease, sim, uids::UIDs, ti::Int) -> Vector{Float64}
+
+Sample recovery durations for the specified agents. In CRN mode this uses a
+slot-indexed, per-timestep distribution so durations do not depend on call
+order within the timestep.
+"""
+function _sample_recovery_draws(disease, sim, uids::UIDs, ti::Int)
+    isempty(uids) && return Float64[]
+
+    mean = disease.dur_inf / sim.pars.dt
+
+    if crn_enabled()
+        md = module_data(disease)
+        dist = StarsimDist(Symbol(md.name, :_recovery), _recovery_dist(disease.recovery_dist, mean))
+        init_dist!(dist; base_seed=sim.pars.rand_seed, trace=string(md.name, ".recovery"))
+        set_slots!(dist, sim.people.slot)
+        jump_dt!(dist, ti)
+        return rvs(dist, uids)
+    end
+
+    draws = Vector{Float64}(undef, length(uids))
+    @inbounds for i in eachindex(uids.values)
+        draws[i] = _sample_dur(disease.recovery_dist, mean, disease.rng)
+    end
+    return draws
+end
+
 # ============================================================================
 # Disease base
 # ============================================================================
@@ -235,10 +274,9 @@ function init_post!(d::SIR, sim)
     d.infection.infected[infect_uids] = true
     d.infection.ti_infected[infect_uids] = 1.0  # Infected at first timestep
 
-    # Recovery duration
-    dur_mean = d.dur_inf / sim.pars.dt
-    for u in infect_uids.values
-        d.ti_recovered.raw[u] = 1.0 + _sample_dur(d.recovery_dist, dur_mean, d.rng)
+    draws = _sample_recovery_draws(d, sim, infect_uids, 1)
+    for (i, u) in pairs(infect_uids.values)
+        d.ti_recovered.raw[u] = 1.0 + draws[i]
     end
 
     return d
@@ -442,9 +480,8 @@ function _do_infection!(d::SIR, sim, target::Int, source::Int, ti::Int)
     d.infection.infected.raw[target] = true
     d.infection.ti_infected.raw[target] = Float64(ti)
 
-    # Recovery duration
-    dur_mean = d.dur_inf / sim.pars.dt
-    d.ti_recovered.raw[target] = Float64(ti) + _sample_dur(d.recovery_dist, dur_mean, d.rng)
+    draw = _sample_recovery_draws(d, sim, UIDs([target]), ti)
+    d.ti_recovered.raw[target] = Float64(ti) + draw[1]
 
     # Log infection
     push!(d.infection.infection_sources, (target, source, ti))
@@ -619,14 +656,13 @@ function init_post!(d::SIS, sim)
 
     infect_uids = UIDs(active[randperm(d.rng, n)[1:n_infect]])
 
-    # Set prognoses for initial infections (matching Python set_prognoses)
-    dur_mean = d.dur_inf / sim.pars.dt
-    for u in infect_uids.values
+    draws = _sample_recovery_draws(d, sim, infect_uids, 1)
+    for (i, u) in pairs(infect_uids.values)
         d.infection.susceptible.raw[u] = false
         d.infection.infected.raw[u] = true
         d.infection.ti_infected.raw[u] = 1.0
         d.immunity.raw[u] += d.imm_boost
-        d.ti_recovered.raw[u] = 1.0 + _sample_dur(d.recovery_dist, dur_mean, d.rng)
+        d.ti_recovered.raw[u] = 1.0 + draws[i]
     end
     return d
 end
@@ -706,23 +742,26 @@ function infect!(d::SIS, sim)
     end
 
     # Deduplicate and apply (set_prognoses equivalent)
-    new_infections = 0
+    new_targets = Int[]
     seen = Set{Int}()
     ti_f = Float64(ti)
-    dur_mean = d.dur_inf / sim.pars.dt
     for t in all_targets
         if !(t in seen)
             push!(seen, t)
-            d.infection.susceptible.raw[t] = false
-            d.infection.infected.raw[t] = true
-            d.infection.ti_infected.raw[t] = ti_f
-            d.immunity.raw[t] += d.imm_boost
-            d.ti_recovered.raw[t] = ti_f + _sample_dur(d.recovery_dist, dur_mean, d.rng)
-            new_infections += 1
+            push!(new_targets, t)
         end
     end
 
-    return new_infections
+    draws = _sample_recovery_draws(d, sim, UIDs(new_targets), ti)
+    for (i, t) in pairs(new_targets)
+        d.infection.susceptible.raw[t] = false
+        d.infection.infected.raw[t] = true
+        d.infection.ti_infected.raw[t] = ti_f
+        d.immunity.raw[t] += d.imm_boost
+        d.ti_recovered.raw[t] = ti_f + draws[i]
+    end
+
+    return length(new_targets)
 end
 
 """Collect SIS infection candidates using snapshot state."""
@@ -982,9 +1021,9 @@ function init_post!(d::SEIR, sim)
     d.infection.infected[infect_uids] = true
     d.infection.ti_infected[infect_uids] = 1.0
 
-    for u in infect_uids.values
-        dur_mean = d.dur_inf / sim.pars.dt
-        d.ti_recovered.raw[u] = 1.0 + _sample_dur(d.recovery_dist, dur_mean, d.rng)
+    draws = _sample_recovery_draws(d, sim, infect_uids, 1)
+    for (i, u) in pairs(infect_uids.values)
+        d.ti_recovered.raw[u] = 1.0 + draws[i]
     end
 
     return d
@@ -1010,17 +1049,22 @@ function step_state!(d::SEIR, sim)
 
     # Exposed → Infected (after latent period)
     dur_exp_ts = d.dur_exp / dt
-    dur_inf_ts = d.dur_inf / dt
     rng = d.rng
+    new_infectious = Int[]
     @inbounds for u in active
         if exposed_raw[u]
             if (ti_f - ti_exposed_raw[u]) >= dur_exp_ts
                 exposed_raw[u] = false
                 infected_raw[u] = true
                 ti_infected_raw[u] = ti_f
-                ti_rec_raw[u] = ti_f + _sample_dur(d.recovery_dist, dur_inf_ts, rng)
+                push!(new_infectious, u)
             end
         end
+    end
+
+    draws = _sample_recovery_draws(d, sim, UIDs(new_infectious), ti)
+    @inbounds for (i, u) in pairs(new_infectious)
+        ti_rec_raw[u] = ti_f + draws[i]
     end
 
     # Infected → Recovered (or dead)

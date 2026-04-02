@@ -30,7 +30,7 @@ function run_gpu_cached!(sim::Starsim.Sim; track_results::Bool=false)
         Starsim.step!(net, sim)
     end
 
-    gsim = to_gpu(sim)
+    gsim = to_gpu(sim; backend=:metal)
     cache_edges!(gsim)  # upload edges to GPU once
 
     npts = sim.t.npts
@@ -76,7 +76,7 @@ end
 
 function run_gpu_dynamic!(sim::Starsim.Sim)
     init!(sim)
-    gsim = to_gpu(sim)
+    gsim = to_gpu(sim; backend=:metal)
 
     npts = sim.t.npts
     disease_name = first(keys(sim.diseases))
@@ -118,7 +118,7 @@ function run_gpu_fused!(sim::Starsim.Sim; track_results::Bool=false)
         Starsim.step!(net, sim)
     end
 
-    gsim = to_gpu(sim)
+    gsim = to_gpu(sim; backend=:metal)
     cache_edges!(gsim)
 
     npts = sim.t.npts

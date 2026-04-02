@@ -42,7 +42,7 @@ Follows the exact Python starsim loop order:
 """
 function run_gpu_sir!(sim::Starsim.Sim)
     init!(sim)
-    gsim = Starsim.to_gpu(sim)
+    gsim = Starsim.to_gpu(sim; backend=:metal)
 
     npts = sim.t.npts
     disease_name = first(keys(sim.diseases))
@@ -100,7 +100,7 @@ Still follows the correct Python loop order:
 """
 function run_gpu_sir_nosync!(sim::Starsim.Sim)
     init!(sim)
-    gsim = Starsim.to_gpu(sim)
+    gsim = Starsim.to_gpu(sim; backend=:metal)
 
     npts = sim.t.npts
     disease_name = first(keys(sim.diseases))
