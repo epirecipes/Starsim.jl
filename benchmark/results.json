@@ -1,0 +1,36 @@
+{
+  "date": "2026-04-19T20:11:14.056",
+  "config": {
+    "sizes": [10000, 50000, 100000, 200000],
+    "timing_reps": 5,
+    "validation_n": 5000,
+    "validation_reps": 200,
+    "validation_stop": 200.0,
+    "perm_reps": 2000
+  },
+  "timing": {
+    "10000": {"jl_med": 0.073618, "jl_min": 0.073029, "jl_mem_mb": 14.132, "py_med": 1.113184, "py_min": 1.107924, "py_mem_mb": 9.362},
+    "50000": {"jl_med": 0.385260, "jl_min": 0.376931, "jl_mem_mb": 80.384, "py_med": 3.942799, "py_min": 3.936553, "py_mem_mb": 36.111},
+    "100000": {"jl_med": 0.822367, "jl_min": 0.817318, "jl_mem_mb": 75.361, "py_med": 7.506242, "py_min": 7.482577, "py_mem_mb": 69.517},
+    "200000": {"jl_med": 1.938582, "jl_min": 1.927618, "jl_mem_mb": 70.240, "py_med": 14.710972, "py_min": 14.634807, "py_mem_mb": 137.164}
+  },
+  "validation": {
+    "sigma2": 4.938841,
+    "mmd_julia_python":   0.01173591,
+    "p_julia_python":     0.0070,
+    "mmd_julia_split":    -0.00838224,
+    "p_julia_split":      0.9905,
+    "mmd_python_split":   0.00232181,
+    "p_python_split":     0.2874,
+    "jl_summary": {
+      "peak_prev": {"mean": 0.797690, "std": 0.006360},
+      "time_of_peak": {"mean": 15.350000, "std": 0.478167},
+      "attack_rate": {"mean": 0.980728, "std": 0.001953}
+    },
+    "py_summary": {
+      "peak_prev": {"mean": 0.796605, "std": 0.006552},
+      "time_of_peak": {"mean": 15.490000, "std": 0.593008},
+      "attack_rate": {"mean": 0.980775, "std": 0.002127}
+    }
+  }
+}
