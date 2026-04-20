@@ -82,6 +82,11 @@ mutable struct GPUSim
     snap_infected::GPUVector{UInt8}      # Snapshot buffer for synchronous transmission
     snap_susceptible::GPUVector{UInt8}   # Snapshot buffer for synchronous transmission
     edge_capacity::Int
+    # Reusable CPU staging buffers for edge upload (avoids per-step allocation)
+    cpu_p1_buf::Vector{Int32}
+    cpu_p2_buf::Vector{Int32}
+    cpu_beta_buf::Vector{Float32}
+    cpu_rng_buf::Vector{Float32}
     # Cached edges for static network mode
     cached_edges::Bool
     cached_n_edges::Int
@@ -264,6 +269,10 @@ function _to_gpu_impl(sim::Starsim.Sim)
     return GPUSim(sim, gpu_people, gpu_diseases,
                   edge_p1, edge_p2, edge_beta, rng_buf,
                   new_infected, jitter_buf, snap_infected, snap_susceptible, edge_cap,
+                  Vector{Int32}(undef, edge_cap),
+                  Vector{Int32}(undef, edge_cap),
+                  Vector{Float32}(undef, edge_cap),
+                  Vector{Float32}(undef, edge_cap),
                   false, 0, false, Dict{Symbol, Float32}(),
                   Symbol[], Int[], Int[], Bool[],
                   rng_seeds,
@@ -802,8 +811,33 @@ function _ensure_edge_capacity!(gsim::GPUSim, n::Int)
         gsim.edge_p2 = GPUVector{Int32}(zeros(Int32, new_cap))
         gsim.edge_beta = GPUVector{Float32}(zeros(Float32, new_cap))
         gsim.rng_buf = GPUVector{Float32}(zeros(Float32, new_cap))
+        resize!(gsim.cpu_p1_buf, new_cap)
+        resize!(gsim.cpu_p2_buf, new_cap)
+        resize!(gsim.cpu_beta_buf, new_cap)
+        resize!(gsim.cpu_rng_buf, new_cap)
         _ensure_rng_seed_capacity!(gsim, new_cap)
         gsim.edge_capacity = new_cap
+    end
+    return
+end
+
+@inline function _stage_int32!(buf::Vector{Int32}, src::AbstractVector)
+    @inbounds for i in eachindex(src)
+        buf[i] = Int32(src[i])
+    end
+    return
+end
+
+@inline function _stage_float32!(buf::Vector{Float32}, src::AbstractVector)
+    @inbounds for i in eachindex(src)
+        buf[i] = Float32(src[i])
+    end
+    return
+end
+
+@inline function _stage_rand_float32!(buf::Vector{Float32}, n::Int)
+    @inbounds for i in 1:n
+        buf[i] = rand(Float32)
     end
     return
 end
@@ -894,17 +928,17 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
         # Ensure buffers are large enough
         _ensure_edge_capacity!(gsim, n_edges)
 
-        # Copy edge data into pre-allocated GPU buffers (no allocation)
-        cpu_p1 = Int32.(edges.p1)
-        cpu_p2 = Int32.(edges.p2)
-        cpu_eb = Float32.(edges.beta)
-        copyto!(gsim.edge_p1, 1, cpu_p1, 1, n_edges)
-        copyto!(gsim.edge_p2, 1, cpu_p2, 1, n_edges)
-        copyto!(gsim.edge_beta, 1, cpu_eb, 1, n_edges)
+        # Copy edge data into pre-allocated GPU buffers via reusable CPU staging
+        _stage_int32!(gsim.cpu_p1_buf, edges.p1)
+        _stage_int32!(gsim.cpu_p2_buf, edges.p2)
+        _stage_float32!(gsim.cpu_beta_buf, edges.beta)
+        copyto!(gsim.edge_p1, 1, gsim.cpu_p1_buf, 1, n_edges)
+        copyto!(gsim.edge_p2, 1, gsim.cpu_p2_buf, 1, n_edges)
+        copyto!(gsim.edge_beta, 1, gsim.cpu_beta_buf, 1, n_edges)
 
         # Generate random numbers and copy to pre-allocated buffer
-        cpu_rng = rand(Float32, n_edges)
-        copyto!(gsim.rng_buf, 1, cpu_rng, 1, n_edges)
+        _stage_rand_float32!(gsim.cpu_rng_buf, n_edges)
+        copyto!(gsim.rng_buf, 1, gsim.cpu_rng_buf, 1, n_edges)
 
         # Forward direction: p1[i] → p2[i] — reads from snapshots
         @gpu_launch groups_e _transmission_kernel!(
@@ -916,8 +950,8 @@ function gpu_transmit!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
 
         # Reverse direction for bidirectional networks
         if Starsim.network_data(net).bidirectional
-            cpu_rng_rev = rand(Float32, n_edges)
-            copyto!(gsim.rng_buf, 1, cpu_rng_rev, 1, n_edges)
+            _stage_rand_float32!(gsim.cpu_rng_buf, n_edges)
+            copyto!(gsim.rng_buf, 1, gsim.cpu_rng_buf, 1, n_edges)
             @gpu_launch groups_e _transmission_kernel!(
                 gsim.new_infected, gsim.snap_susceptible, gsim.snap_infected,
                 gpu_dis.rel_trans, gpu_dis.rel_sus,
@@ -1351,12 +1385,12 @@ function cache_edges!(gsim::GPUSim)
         n_edges = length(edges)
         n_edges == 0 && continue
 
-        cpu_p1 = Int32.(edges.p1)
-        cpu_p2 = Int32.(edges.p2)
-        cpu_eb = Float32.(edges.beta)
-        copyto!(gsim.edge_p1, offset + 1, cpu_p1, 1, n_edges)
-        copyto!(gsim.edge_p2, offset + 1, cpu_p2, 1, n_edges)
-        copyto!(gsim.edge_beta, offset + 1, cpu_eb, 1, n_edges)
+        _stage_int32!(gsim.cpu_p1_buf, edges.p1)
+        _stage_int32!(gsim.cpu_p2_buf, edges.p2)
+        _stage_float32!(gsim.cpu_beta_buf, edges.beta)
+        copyto!(gsim.edge_p1, offset + 1, gsim.cpu_p1_buf, 1, n_edges)
+        copyto!(gsim.edge_p2, offset + 1, gsim.cpu_p2_buf, 1, n_edges)
+        copyto!(gsim.edge_beta, offset + 1, gsim.cpu_beta_buf, 1, n_edges)
 
         push!(gsim.cached_net_names, net_name)
         push!(gsim.cached_net_offsets, offset)
