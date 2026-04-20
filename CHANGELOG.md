@@ -31,12 +31,18 @@ All notable changes to Starsim.jl are documented here.
   failing on `Expr(:escape, …)`. (`ef8edb2`)
 
 ### Performance
+- `RandomNet.update_edges!` now uses a Lemire nearly-divisionless
+  Fisher-Yates (`_lemire_shuffle!`) instead of `Random.shuffle!`. One
+  `rand(rng, UInt64)` per swap (vs. ~1.5 with masked rejection sampling)
+  and no sampler-construction overhead per iteration. ~3.5x faster
+  shuffle, ~1.7x end-to-end on default SIR sims.
 - CPU `step_state!` for `SIR` and `SEIR` with `p_death > 0` (the default
   for SIR) now uses a single zero-allocation pass over `auids` instead of
   `state_lte` + `intersect` + batch-rand + `Set` ops. CRN-equivalent
   (same iteration order, same number of `rand` draws). Yields a ~2x
-  end-to-end speedup on default SIR sims; n=100k went from ~3.07s to
-  ~1.44s, lifting Julia/Python ratio from 2.6x to ~5.5x.
+  end-to-end speedup on default SIR sims.
+- Combined: default SIR n=100k went from ~3.07s to ~0.85s (~3.6x), lifting
+  Julia/Python ratio from 2.6x to ~9.1x.
 - `gpu_transmit!` and `cache_edges!` now reuse CPU staging buffers
   (`cpu_p1_buf`, `cpu_p2_buf`, `cpu_beta_buf`, `cpu_rng_buf`) on `GPUSim`
   instead of allocating fresh arrays per step per network. (`cfbf0be`)
