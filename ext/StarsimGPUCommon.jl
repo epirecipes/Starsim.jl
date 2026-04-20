@@ -1733,12 +1733,15 @@ function _run_gpu_impl!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=fals
         end
 
         # Step 9: Transmission on GPU (uploads fresh edges each step)
+        # Track per-disease new_infected counts since gsim.new_infected is shared
+        new_inf_counts = Dict{Symbol, Int}()
         for dname in disease_names
             if cache_edges && gsim.cached_edges
                 gpu_transmit_cached!(gsim, dname; current_ti=ti)
             else
                 gpu_transmit!(gsim, dname; current_ti=ti)
             end
+            new_inf_counts[dname] = Int(sum(gsim.new_infected))
         end
 
         # Steps 10-12: Results tracking
@@ -1768,9 +1771,13 @@ function _run_gpu_impl!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=fals
 
                 n_sus = Int(sum(gpu_dis.susceptible))
                 n_inf = Int(sum(gpu_dis.infected))
+                n_new = get(new_inf_counts, dname, 0)
 
                 md.results[:n_susceptible][ti] = Float64(n_sus)
                 md.results[:n_infected][ti] = Float64(n_inf)
+                if haskey(md.results, :new_infections)
+                    md.results[:new_infections][ti] = Float64(n_new)
+                end
 
                 if gpu_dis.recovered !== nothing
                     n_rec = Int(sum(gpu_dis.recovered))
