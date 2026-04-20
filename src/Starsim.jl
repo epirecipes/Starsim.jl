@@ -128,15 +128,6 @@ function to_cpu end
 """Backend-specific GPU run implementation provided by GPU extensions."""
 function _run_gpu_backend! end
 
-"""Plot simulation results using Makie (Makie extension)."""
-function plot_sim end
-
-"""Plot a single disease's results using Makie (Makie extension)."""
-function plot_disease end
-
-"""Plot comparison of multiple simulations using Makie (Makie extension)."""
-function plot_comparison end
-
 """Define an epidemiological network ACSet (Catlab extension)."""
 function EpiNet end
 
@@ -157,7 +148,7 @@ function epi_uwd end
 
 export plot_sim, plot_disease, plot_comparison
 export sensitivity, sensitivity_timeseries, gradient_objective, build_optproblem, run_optimization!
-export enzyme_sensitivity, to_gpu, to_cpu, run_gpu!, plot_sim, plot_disease, plot_comparison
+export enzyme_sensitivity, to_gpu, to_cpu, run_gpu!
 export EpiNet, OpenEpiNet, EpiSharer, compose_epi, to_sim, epi_uwd
 
 end # module Starsim

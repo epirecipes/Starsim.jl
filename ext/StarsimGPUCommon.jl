@@ -87,6 +87,10 @@ mutable struct GPUSim
     cached_n_edges::Int
     cached_bidirectional::Bool
     cached_beta_dt::Dict{Symbol, Float32}
+    cached_net_names::Vector{Symbol}
+    cached_net_offsets::Vector{Int}
+    cached_net_lengths::Vector{Int}
+    cached_net_bidir::Vector{Bool}
     # GPU-side RNG state (xorshift32 per-edge seeds)
     rng_seeds::GPUVector{UInt32}
     # CRN support: base seeds (per-agent), reset each timestep
@@ -261,6 +265,7 @@ function _to_gpu_impl(sim::Starsim.Sim)
                   edge_p1, edge_p2, edge_beta, rng_buf,
                   new_infected, jitter_buf, snap_infected, snap_susceptible, edge_cap,
                   false, 0, false, Dict{Symbol, Float32}(),
+                  Symbol[], Int[], Int[], Bool[],
                   rng_seeds,
                   use_crn, rng_seeds_base, rng_seeds_agent)
 end
@@ -1142,6 +1147,9 @@ function gpu_step_fused!(gsim::GPUSim, disease_name::Symbol; current_ti::Int)
 
     gpu_dis = gsim.diseases[disease_name]
     disease = gsim.sim.diseases[disease_name]
+    if disease isa Starsim.SEIR
+        error("gpu_step_fused! does not support SEIR diseases yet. Use gpu_step!(gsim, $disease_name) instead.")
+    end
     n_agents = Int32(gpu_dis.n)
     ti_f = Float32(current_ti)
     n_edges = Int32(gsim.cached_n_edges)
@@ -1321,18 +1329,22 @@ To uncache: `uncache_edges!(gsim)`.
 """
 function cache_edges!(gsim::GPUSim)
     total_edges = 0
-    bidir = false
+    bidir_any = false
 
     for (net_name, net) in gsim.sim.networks
         edges = Starsim.network_edges(net)
         n_edges = length(edges)
         total_edges += n_edges
-        bidir = bidir || Starsim.network_data(net).bidirectional
+        bidir_any = bidir_any || Starsim.network_data(net).bidirectional
     end
 
     _ensure_edge_capacity!(gsim, total_edges)
 
-    # Upload edges and cache beta_per_dt for each disease
+    empty!(gsim.cached_net_names)
+    empty!(gsim.cached_net_offsets)
+    empty!(gsim.cached_net_lengths)
+    empty!(gsim.cached_net_bidir)
+
     offset = 0
     for (net_name, net) in gsim.sim.networks
         edges = Starsim.network_edges(net)
@@ -1345,9 +1357,16 @@ function cache_edges!(gsim::GPUSim)
         copyto!(gsim.edge_p1, offset + 1, cpu_p1, 1, n_edges)
         copyto!(gsim.edge_p2, offset + 1, cpu_p2, 1, n_edges)
         copyto!(gsim.edge_beta, offset + 1, cpu_eb, 1, n_edges)
+
+        push!(gsim.cached_net_names, net_name)
+        push!(gsim.cached_net_offsets, offset)
+        push!(gsim.cached_net_lengths, n_edges)
+        push!(gsim.cached_net_bidir, Starsim.network_data(net).bidirectional)
+
         offset += n_edges
 
-        # Cache beta_per_dt for each disease
+        # Legacy single-beta cache kept for backward compat (last network wins);
+        # gpu_transmit_cached! now uses per-network beta lookup directly.
         for (dname, disease) in gsim.sim.diseases
             dd = Starsim.disease_data(disease)
             bdt = get(dd.beta_per_dt, net_name, 0.0)
@@ -1355,14 +1374,13 @@ function cache_edges!(gsim::GPUSim)
         end
     end
 
-    # Ensure rng_buf is large enough
     if length(gsim.rng_buf) < total_edges
         gsim.rng_buf = GPUVector{Float32}(zeros(Float32, total_edges))
     end
 
     gsim.cached_edges = true
     gsim.cached_n_edges = total_edges
-    gsim.cached_bidirectional = bidir
+    gsim.cached_bidirectional = bidir_any
     gpu_synchronize()
     return gsim
 end
@@ -1371,6 +1389,10 @@ end
 function uncache_edges!(gsim::GPUSim)
     gsim.cached_edges = false
     gsim.cached_n_edges = 0
+    empty!(gsim.cached_net_names)
+    empty!(gsim.cached_net_offsets)
+    empty!(gsim.cached_net_lengths)
+    empty!(gsim.cached_net_bidir)
     return gsim
 end
 
@@ -1389,13 +1411,9 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
     n_agents = Int32(gpu_dis.n)
     ti_f = Float32(current_ti)
     n_edges = gsim.cached_n_edges
-    n_edges_i32 = Int32(n_edges)
-    groups_e = cld(n_edges, GPU_THREADS)
     groups_a = cld(n_agents, GPU_THREADS)
 
-    beta_dt_f32 = get(gsim.cached_beta_dt, disease_name, Float32(0))
-    beta_dt_f32 == Float32(0) && return gsim
-
+    # CRN reset is per-step, applied once across all networks
     if gsim.crn_mode
         ti_jump = UInt32(current_ti) * CRN_DT_JUMP
         @gpu_launch groups_a _crn_reset_seeds_kernel!(
@@ -1408,85 +1426,100 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
     # Snapshot infected/susceptible for synchronous transmission
     copyto!(gsim.snap_infected, gpu_dis.infected)
     copyto!(gsim.snap_susceptible, gpu_dis.susceptible)
-
-    # Reset new_infected
     gpu_fill!(gsim.new_infected, 0x00)
 
-    if gsim.crn_mode
-        if disease isa Starsim.SIS
-            @gpu_launch groups_e _crn_fused_transmit_sis_kernel!(
-                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
-                gpu_dis.rel_trans, gpu_dis.rel_sus,
-                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
-                beta_dt_f32, gsim.rng_seeds_agent,
-                n_edges_i32,
-            )
-            if gsim.cached_bidirectional
+    # Iterate per network: each has its own beta_per_dt and bidirectionality
+    dd = Starsim.disease_data(disease)
+    @inbounds for k in eachindex(gsim.cached_net_names)
+        net_name = gsim.cached_net_names[k]
+        offset = gsim.cached_net_offsets[k]
+        n_e = gsim.cached_net_lengths[k]
+        bidir = gsim.cached_net_bidir[k]
+        n_e == 0 && continue
+
+        beta_dt = Float32(get(dd.beta_per_dt, net_name, 0.0))
+        beta_dt == Float32(0) && continue
+
+        rng = offset+1:offset+n_e
+        p1_v = view(gsim.edge_p1, rng)
+        p2_v = view(gsim.edge_p2, rng)
+        eb_v = view(gsim.edge_beta, rng)
+        n_e_i32 = Int32(n_e)
+        groups_e = cld(n_e, GPU_THREADS)
+
+        if gsim.crn_mode
+            if disease isa Starsim.SIS
                 @gpu_launch groups_e _crn_fused_transmit_sis_kernel!(
                     gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
                     gpu_dis.rel_trans, gpu_dis.rel_sus,
-                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
-                    beta_dt_f32, gsim.rng_seeds_agent,
-                    n_edges_i32,
+                    p1_v, p2_v, eb_v,
+                    beta_dt, gsim.rng_seeds_agent, n_e_i32,
                 )
-            end
-        else
-            @gpu_launch groups_e _crn_fused_transmit_sir_kernel!(
-                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
-                gpu_dis.rel_trans, gpu_dis.rel_sus,
-                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
-                beta_dt_f32, gsim.rng_seeds_agent,
-                n_edges_i32,
-            )
-            if gsim.cached_bidirectional
+                if bidir
+                    @gpu_launch groups_e _crn_fused_transmit_sis_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        p2_v, p1_v, eb_v,
+                        beta_dt, gsim.rng_seeds_agent, n_e_i32,
+                    )
+                end
+            else
                 @gpu_launch groups_e _crn_fused_transmit_sir_kernel!(
                     gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
                     gpu_dis.rel_trans, gpu_dis.rel_sus,
-                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
-                    beta_dt_f32, gsim.rng_seeds_agent,
-                    n_edges_i32,
+                    p1_v, p2_v, eb_v,
+                    beta_dt, gsim.rng_seeds_agent, n_e_i32,
                 )
+                if bidir
+                    @gpu_launch groups_e _crn_fused_transmit_sir_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        p2_v, p1_v, eb_v,
+                        beta_dt, gsim.rng_seeds_agent, n_e_i32,
+                    )
+                end
             end
-        end
-    else
-        if disease isa Starsim.SIS
-            @gpu_launch groups_e _fused_transmit_sis_kernel!(
-                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
-                gpu_dis.rel_trans, gpu_dis.rel_sus,
-                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
-                beta_dt_f32, gsim.rng_seeds, n_edges_i32,
-            )
-            if gsim.cached_bidirectional
+        else
+            if disease isa Starsim.SIS
                 @gpu_launch groups_e _fused_transmit_sis_kernel!(
                     gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
                     gpu_dis.rel_trans, gpu_dis.rel_sus,
-                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
-                    beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+                    p1_v, p2_v, eb_v,
+                    beta_dt, gsim.rng_seeds, n_e_i32,
                 )
-            end
-        else
-            @gpu_launch groups_e _fused_transmit_sir_kernel!(
-                gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
-                gpu_dis.rel_trans, gpu_dis.rel_sus,
-                gsim.edge_p1, gsim.edge_p2, gsim.edge_beta,
-                beta_dt_f32, gsim.rng_seeds, n_edges_i32,
-            )
-            if gsim.cached_bidirectional
+                if bidir
+                    @gpu_launch groups_e _fused_transmit_sis_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        p2_v, p1_v, eb_v,
+                        beta_dt, gsim.rng_seeds, n_e_i32,
+                    )
+                end
+            else
                 @gpu_launch groups_e _fused_transmit_sir_kernel!(
                     gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
                     gpu_dis.rel_trans, gpu_dis.rel_sus,
-                    gsim.edge_p2, gsim.edge_p1, gsim.edge_beta,
-                    beta_dt_f32, gsim.rng_seeds, n_edges_i32,
+                    p1_v, p2_v, eb_v,
+                    beta_dt, gsim.rng_seeds, n_e_i32,
                 )
+                if bidir
+                    @gpu_launch groups_e _fused_transmit_sir_kernel!(
+                        gsim.new_infected, gsim.snap_infected, gsim.snap_susceptible,
+                        gpu_dis.rel_trans, gpu_dis.rel_sus,
+                        p2_v, p1_v, eb_v,
+                        beta_dt, gsim.rng_seeds, n_e_i32,
+                    )
+                end
             end
         end
     end
 
     gpu_synchronize()
 
-    # Apply infections
+    # Apply infections (same as before — per-disease, per-agent)
+    groups_a_i = cld(Int(n_agents), GPU_THREADS)
     if disease isa Starsim.SEIR && gpu_dis.exposed !== nothing
-        @gpu_launch groups_a _apply_exposures_seir_kernel!(
+        @gpu_launch groups_a_i _apply_exposures_seir_kernel!(
             gpu_dis.susceptible, gpu_dis.exposed, gpu_dis.ti_exposed,
             gsim.new_infected, ti_f, n_agents,
         )
@@ -1499,7 +1532,7 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
             _sample_recovery_durations_dense(disease, dur_inf_ts, gpu_dis.n)
         end
         copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
-        @gpu_launch groups_a _apply_infections_sir_kernel!(
+        @gpu_launch groups_a_i _apply_infections_sir_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
             gpu_dis.ti_recovered, gsim.new_infected, ti_f,
             gsim.jitter_buf, n_agents,
@@ -1513,7 +1546,7 @@ function gpu_transmit_cached!(gsim::GPUSim, disease_name::Symbol; current_ti::In
             _sample_recovery_durations_dense(disease, dur_inf_ts, gpu_dis.n)
         end
         copyto!(gsim.jitter_buf, 1, cpu_dur, 1, gpu_dis.n)
-        @gpu_launch groups_a _apply_infections_sis_kernel!(
+        @gpu_launch groups_a_i _apply_infections_sis_kernel!(
             gpu_dis.susceptible, gpu_dis.infected, gpu_dis.ti_infected,
             gpu_dis.ti_recovered, gsim.new_infected, ti_f,
             gsim.jitter_buf, n_agents,
@@ -1628,6 +1661,27 @@ run_gpu!(sim; backend=:metal)
 function _run_gpu_impl!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=false)
     if !sim.initialized
         Starsim.init!(sim)
+    end
+
+    if !isempty(sim.extra_modules)
+        error("GPU run does not support extra_modules: $(collect(keys(sim.extra_modules))). Use CPU run!() instead.")
+    end
+    if !isempty(sim.interventions)
+        error("GPU run does not support interventions: $(collect(keys(sim.interventions))). Use CPU run!() instead.")
+    end
+    if !isempty(sim.analyzers)
+        error("GPU run does not support analyzers: $(collect(keys(sim.analyzers))). Use CPU run!() instead.")
+    end
+    if !isempty(sim.connectors)
+        error("GPU run does not support connectors: $(collect(keys(sim.connectors))). Use CPU run!() instead.")
+    end
+    if sim.pars.use_aging
+        error("GPU run does not support use_aging=true. Set use_aging=false or use CPU run!().")
+    end
+    for (dname, disease) in sim.diseases
+        if hasproperty(disease, :p_death) && disease.p_death > 0.0
+            error("GPU run does not support disease-induced death (p_death=$(disease.p_death) for $dname). Set p_death=0.0 or use CPU run!().")
+        end
     end
 
     n_agents = sim.pars.n_agents
@@ -1773,4 +1827,3 @@ export gpu_step!, gpu_step_state!, gpu_transmit!, gpu_waning!, sync_to_gpu!
 export cache_edges!, uncache_edges!, gpu_transmit_cached!
 export gpu_step_fused!, gpu_reset_rng!
 
-end # module
