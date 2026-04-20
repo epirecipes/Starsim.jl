@@ -1602,6 +1602,22 @@ Called after `to_cpu` in the results round-trip. Compares current state
 (from GPU) with previous state to detect new infections and applies
 `imm_boost` to their immunity level.
 """
+"""
+Apply SIS immunity boost on CPU after each transmission step.
+
+Required because `disease.immunity` (Float64) is CPU-only. To eliminate
+this round-trip:
+  1. Add `immunity::GPUVector{Float32}` to `GPUDiseaseArrays` for SIS.
+  2. Sync at `to_gpu` / `to_cpu`.
+  3. Add `_sis_immunity_boost_kernel!`: for each agent newly infected
+     this step (`new_infected[i] == 0x01`), `immunity[i] += imm_boost`
+     and `rel_sus[i] = max(0, 1 - immunity[i])`.
+  4. Add `_sis_immunity_waning_kernel!`: for every agent with
+     `immunity[i] > 0`, multiply by `(1 - waning_prob)` and refresh
+     `rel_sus[i]`.
+  5. Replace this CPU loop and `_gpu_sis_immunity_waning!` with the
+     kernels and remove the per-step CPU↔GPU sync.
+"""
 function _gpu_sis_immunity_boost!(sim, disease_names)
     for dname in disease_names
         disease = sim.diseases[dname]
@@ -1714,7 +1730,26 @@ function _run_gpu_impl!(sim::Starsim.Sim; verbose::Int=1, cache_edges::Bool=fals
     end
     for (dname, disease) in sim.diseases
         if hasproperty(disease, :p_death) && disease.p_death > 0.0
+            # TODO(gpu-pdeath): port disease-induced death to GPU.
+            # Plan:
+            #   1. Add `_sir_recovery_with_death_kernel!` that takes `alive`,
+            #      `p_death::Float32`, and `rng_buf`. Replace the recovery
+            #      branch: if rand < p_death set alive=0 else recovered=1.
+            #      Same for SEIR.
+            #   2. Stage `rand(Float32, n_agents)` into `gsim.cpu_rng_buf`
+            #      and copy to `gsim.rng_buf` before launching the kernel.
+            #   3. Update `n_alive = sum(gsim.people.alive)` accounting in
+            #      the fast path (already does this).
+            #   4. After the loop, sync `alive` back to CPU and call
+            #      `request_death!(...)` for the newly-zeroed indices so
+            #      that demographics/auids are updated.
+            #   5. Add a `:cum_deaths` result update equivalent to the
+            #      CPU-side handling.
             error("GPU run does not support disease-induced death (p_death=$(disease.p_death) for $dname). Set p_death=0.0 or use CPU run!().")
+        end
+        if !(disease isa Starsim.SIR || disease isa Starsim.SIS || disease isa Starsim.SEIR)
+            error("GPU run only supports SIR, SIS, and SEIR diseases. " *
+                  "Got $(typeof(disease)) for $dname. Use CPU run!() instead.")
         end
     end
 

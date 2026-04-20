@@ -937,6 +937,56 @@ using Statistics: mean
             @test get_result(sim_uncached, :sir, :n_infected) == get_result(sim_cached, :sir, :n_infected)
         end
 
+        function run_gpu_multidisease(backend::Symbol)
+            # SIR + SEIR coexisting on GPU. Validates per-disease snapshotting
+            # of the shared gsim.new_infected buffer (added in f88696d).
+            sim = Sim(
+                n_agents = 500,
+                networks = RandomNet(n_contacts=6),
+                diseases = [
+                    SIR(beta=0.05, dur_inf=8.0, init_prev=0.05, p_death=0.0),
+                    SEIR(beta=0.05, dur_exp=2.0, dur_inf=8.0, init_prev=0.05, p_death=0.0),
+                ],
+                dt = 1.0, stop = 20.0, rand_seed = 5, verbose = 0,
+            )
+            run!(sim; verbose=0, backend=backend)
+            sir_inf = get_result(sim, :sir, :n_infected)
+            seir_inf = get_result(sim, :seir, :n_infected)
+            sir_new = get_result(sim, :sir, :new_infections)
+            seir_new = get_result(sim, :seir, :new_infections)
+            # Both diseases should have non-trivial dynamics
+            @test maximum(sir_inf) > 0
+            @test maximum(seir_inf) > 0
+            @test sum(sir_new) > 0
+            @test sum(seir_new) > 0
+        end
+
+        function run_gpu_alloc_guard(backend::Symbol)
+            # Regression guard for rv-8: gpu_transmit! must not allocate
+            # per-step CPU staging arrays now that staging buffers are reused.
+            sim = Sim(
+                n_agents = 200,
+                networks = RandomNet(n_contacts=4),
+                diseases = SIR(beta=0.05, dur_inf=8.0, init_prev=0.05, p_death=0.0),
+                dt = 1.0, stop = 5.0, rand_seed = 11, verbose = 0,
+            )
+            init!(sim)
+            gsim = to_gpu(sim; backend=backend)
+            ext_name = backend === :metal ? :StarsimMetalExt :
+                       backend === :cuda ? :StarsimCUDAExt :
+                       :StarsimAMDGPUExt
+            ext = Base.get_extension(Starsim, ext_name)
+            transmit! = getproperty(ext, :gpu_transmit!)
+            # Warm-up call (compilation, first allocations)
+            transmit!(gsim, :sir; current_ti=1)
+            # Measure subsequent calls — should not grow significantly
+            n_alloc = @allocated transmit!(gsim, :sir; current_ti=2)
+            # Allow some allocation for kernel launch internals, but the per-step
+            # CPU staging arrays (4 × n_edges scalars) should no longer dominate.
+            @test n_alloc < 5_000
+            to_cpu(gsim)
+        end
+
         @testset "Metal" begin
             if Sys.isapple() && gpu_backend_usable(:Metal)
                 run_gpu_smoke(:metal)
@@ -949,6 +999,8 @@ using Statistics: mean
                 run_cpu_gpu_recovery_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
                 run_gpu_new_infections_logged(:metal)
                 run_gpu_multinetwork_beta(:metal)
+                run_gpu_multidisease(:metal)
+                run_gpu_alloc_guard(:metal)
             else
                 @test_skip "Metal backend unavailable"
             end
@@ -966,6 +1018,8 @@ using Statistics: mean
                 run_cpu_gpu_recovery_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
                 run_gpu_new_infections_logged(:cuda)
                 run_gpu_multinetwork_beta(:cuda)
+                run_gpu_multidisease(:cuda)
+                run_gpu_alloc_guard(:cuda)
             else
                 @test_skip "CUDA backend unavailable"
             end
@@ -983,6 +1037,8 @@ using Statistics: mean
                 run_cpu_gpu_recovery_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
                 run_gpu_new_infections_logged(:amdgpu)
                 run_gpu_multinetwork_beta(:amdgpu)
+                run_gpu_multidisease(:amdgpu)
+                run_gpu_alloc_guard(:amdgpu)
             else
                 @test_skip "AMDGPU backend unavailable"
             end
