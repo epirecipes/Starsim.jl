@@ -852,7 +852,7 @@ using Statistics: mean
             )
         end
 
-        function run_cpu_gpu_parity(backend::Symbol, disease_name::Symbol, disease; cache_edges::Bool=false)
+        function run_cpu_gpu_recovery_parity(backend::Symbol, disease_name::Symbol, disease; cache_edges::Bool=false)
             old_slot_scale = Starsim.OPTIONS.slot_scale
             Starsim.OPTIONS.slot_scale = 5.0
             try
@@ -885,16 +885,70 @@ using Statistics: mean
             end
         end
 
+        function run_gpu_new_infections_logged(backend::Symbol)
+            sim = Sim(
+                n_agents = 1000,
+                networks = RandomNet(n_contacts=8),
+                diseases = SIR(beta=0.1, dur_inf=10.0, init_prev=0.05, p_death=0.0),
+                dt = 1.0,
+                stop = 30.0,
+                rand_seed = 17,
+                verbose = 0,
+            )
+            run!(sim; verbose=0, backend=backend)
+            new_inf = get_result(sim, :sir, :new_infections)
+            @test sum(new_inf) > 0          # GPU fast path must populate new_infections
+            @test all(>=(0.0), new_inf)
+            @test length(new_inf) == sim.t.npts
+        end
+
+        function run_gpu_multinetwork_beta(backend::Symbol)
+            # Two networks with very different per-network beta. The cached
+            # path used to collapse to one beta per disease across all
+            # networks, so this is a regression guard for that bug.
+            graph_fn_a = (n, rng) -> begin
+                g = Graphs.SimpleGraph(n)
+                for i in 1:(n-1); Graphs.add_edge!(g, i, i+1); end
+                return g
+            end
+            graph_fn_b = (n, rng) -> begin
+                g = Graphs.SimpleGraph(n)
+                for i in 1:2:(n-1); Graphs.add_edge!(g, i, i+1); end
+                return g
+            end
+            disease = SIR(
+                beta = Dict(:netA => 0.001, :netB => 0.5),
+                dur_inf = 10.0, init_prev = 0.05, p_death = 0.0,
+            )
+            make = () -> Sim(
+                n_agents = 200,
+                networks = Dict(
+                    :netA => StaticNet(graph_fn=graph_fn_a, n_contacts=1),
+                    :netB => StaticNet(graph_fn=graph_fn_b, n_contacts=1),
+                ),
+                diseases = deepcopy(disease),
+                dt = 1.0, stop = 10.0, rand_seed = 99, verbose = 0,
+            )
+            sim_uncached = make()
+            sim_cached = make()
+            run!(sim_uncached; verbose=0, backend=backend)
+            run_gpu!(sim_cached; verbose=0, backend=backend, cache_edges=true)
+            # Cached vs uncached must produce equal infection counts
+            @test get_result(sim_uncached, :sir, :n_infected) == get_result(sim_cached, :sir, :n_infected)
+        end
+
         @testset "Metal" begin
             if Sys.isapple() && gpu_backend_usable(:Metal)
                 run_gpu_smoke(:metal)
                 run_gpu_reproducibility(:metal)
-                run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
-                run_cpu_gpu_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_recovery_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:metal, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:metal, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:metal, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_gpu_new_infections_logged(:metal)
+                run_gpu_multinetwork_beta(:metal)
             else
                 @test_skip "Metal backend unavailable"
             end
@@ -904,12 +958,14 @@ using Statistics: mean
             if gpu_backend_usable(:CUDA)
                 run_gpu_smoke(:cuda)
                 run_gpu_reproducibility(:cuda)
-                run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
-                run_cpu_gpu_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_recovery_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:cuda, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:cuda, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:cuda, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_gpu_new_infections_logged(:cuda)
+                run_gpu_multinetwork_beta(:cuda)
             else
                 @test_skip "CUDA backend unavailable"
             end
@@ -919,12 +975,14 @@ using Statistics: mean
             if gpu_backend_usable(:AMDGPU)
                 run_gpu_smoke(:amdgpu)
                 run_gpu_reproducibility(:amdgpu)
-                run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
-                run_cpu_gpu_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
-                run_cpu_gpu_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
-                run_cpu_gpu_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0))
+                run_cpu_gpu_recovery_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0))
+                run_cpu_gpu_recovery_parity(:amdgpu, :sir, SIR(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:amdgpu, :sis, SIS(beta=100.0, dur_inf=8.0, init_prev=0.5, p_death=0.0, waning=0.0); cache_edges=true)
+                run_cpu_gpu_recovery_parity(:amdgpu, :seir, SEIR(beta=100.0, dur_exp=1.0, dur_inf=8.0, init_prev=0.5, p_death=0.0); cache_edges=true)
+                run_gpu_new_infections_logged(:amdgpu)
+                run_gpu_multinetwork_beta(:amdgpu)
             else
                 @test_skip "AMDGPU backend unavailable"
             end
