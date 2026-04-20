@@ -1,155 +1,111 @@
-# GPU Acceleration
+# GPU acceleration
 Simon Frost
 
 - [Overview](#overview)
-- [Architecture](#architecture)
-- [Supported backends](#supported-backends)
-- [Supported diseases](#supported-diseases)
-- [Usage](#usage)
-- [Performance](#performance)
-- [API reference](#api-reference)
-- [Summary](#summary)
+- [Quick start](#quick-start)
+- [Cached static networks](#cached-static-networks)
+- [Common Random Numbers (CRN)](#common-random-numbers-crn)
+- [Supported features](#supported-features)
+- [Restrictions](#restrictions)
+- [When GPU helps](#when-gpu-helps)
+- [Implementation notes](#implementation-notes)
 
 ## Overview
 
-Starsim.jl provides GPU acceleration through three package extensions
-supporting all major GPU platforms. Disease dynamics (transmission,
-recovery, state transitions) run on GPU while structurally dynamic
-operations (network rewiring, demographics) remain on CPU.
+Starsim.jl supports GPU acceleration through three backend extensions:
 
-## Architecture
+| Backend   | Hardware      | Package   |
+|-----------|---------------|-----------|
+| `:metal`  | Apple Silicon | Metal.jl  |
+| `:cuda`   | NVIDIA        | CUDA.jl   |
+| `:amdgpu` | AMD (ROCm)    | AMDGPU.jl |
 
-The GPU extension uses a **hybrid CPU/GPU** approach:
+The relevant extension is loaded automatically when you load the
+corresponding package. A `:gpu` / `:auto` shortcut picks the loaded
+backend if exactly one is available.
 
-**GPU (MtlVector, Float32/UInt8):**
-- Agent state arrays: `susceptible`, `infected`, `recovered`, `exposed`
-- Disease timing arrays: `ti_infected`, `ti_recovered`, `ti_exposed`
-- Transmission kernel (per-edge probability evaluation)
-- Recovery kernel (`ti_recovered ≤ current_ti` check)
-- SEIR exposure-to-infection transition
-- GPU-side result counting (`sum()` on MtlVector)
-
-**CPU (Vector, Float64/Bool):**
-- Network edge lists (rebuilt each timestep for dynamic networks)
-- Recovery duration sampling (lognormal distribution)
-- People management (births, deaths, UID tracking)
-- SIS immunity waning (requires per-agent float arithmetic)
-
-The GPU loop follows the exact same 16-step integration order as the CPU,
-ensuring identical disease dynamics.
-
-## Supported backends
-
-| Backend | Extension | GPU type | Package | Platform |
-|---------|-----------|----------|---------|----------|
-| Metal   | `StarsimMetalExt` | `MtlVector` | [Metal.jl](https://github.com/JuliaGPU/Metal.jl) | Apple Silicon (macOS) |
-| CUDA    | `StarsimCUDAExt`  | `CuVector`  | [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) | NVIDIA GPUs |
-| ROCm    | `StarsimAMDGPUExt`| `ROCVector` | [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) | AMD GPUs |
-
-Extensions load automatically when the corresponding GPU package is
-imported alongside Starsim:
+## Quick start
 
 ``` julia
-using Starsim, Metal   # Apple Silicon
-using Starsim, CUDA    # NVIDIA
-using Starsim, AMDGPU  # AMD
-```
+using Starsim
+using Metal       # or CUDA / AMDGPU
 
-All three backends share the same API (`run_gpu!`, `to_gpu`, `to_cpu`,
-etc.) and implement identical algorithms. All use Float32/UInt8 on GPU
-for maximum performance.
-
-## Supported diseases
-
-| Disease | GPU support | Notes |
-|---------|:-----------:|-------|
-| SIR     | ✅          | Full support including lognormal recovery |
-| SIS     | ✅          | Immunity waning handled via CPU roundtrip |
-| SEIR    | ✅          | E→I transition with recovery time on GPU |
-
-## Usage
-
-``` julia
-using Starsim, Metal
-
-# Simple — use run_gpu! directly
 sim = Sim(
     n_agents = 100_000,
-    diseases = [SIR(beta=0.05, dur_inf=10.0, init_prev=0.01)],
-    networks = [RandomNet(n_contacts=10)],
-    stop = 50.0, dt = 1.0,
+    networks = RandomNet(n_contacts=10),
+    diseases = SIR(beta=0.05, dur_inf=10.0, init_prev=0.001, p_death=0.0),
+    dt = 1.0, stop = 100.0, rand_seed = 1,
 )
-Starsim.run_gpu!(sim; verbose=1, backend=:metal)
 
-# Static network mode (edges generated once, cached on GPU)
-sim2 = Sim(
-    n_agents = 1_000_000,
-    diseases = [SIR(beta=0.05, dur_inf=10.0, init_prev=0.01)],
-    networks = [RandomNet(n_contacts=10)],
-    stop = 50.0, dt = 1.0,
-)
-Starsim.run_gpu!(sim2; verbose=1, backend=:metal, cache_edges=true)
+run!(sim; backend=:metal)        # or :cuda, :amdgpu, :gpu (auto)
+plot(sim)
 ```
 
-## Performance
+## Cached static networks
 
-Benchmarks on Apple M2 Ultra (Metal GPU, 76 GPU cores):
+For repeat runs over a static network (e.g. parameter sweeps,
+calibration), upload the edge list once and reuse it across timesteps:
 
-**Dynamic edges (default — edges regenerated each step):**
+``` julia
+run_gpu!(sim; backend=:metal, cache_edges=true)
+```
 
-| Agents | CPU (M a-ts/s) | GPU (M a-ts/s) | Speedup |
-|--------|:-:|:-:|:-:|
-| 1K     | 12 | 0.2 | 0.02x |
-| 10K    | 12 | 1.6 | 0.13x |
-| 100K   | 12 | 4.2 | 0.36x |
-| 500K   | 9  | 5.1 | 0.55x |
-| 1M     | 9  | 5.2 | 0.60x |
-| 5M     | 6  | 4.8 | 0.79x |
+The cached path skips per-step edge uploads, which is a significant
+speedup on large networks. Per-network `beta` values are honored —
+multiple networks with different `beta_per_dt[net_name]` produce the
+correct transmission rates on each network.
 
-**Cached edges (static network — single upload):**
+## Common Random Numbers (CRN)
 
-| Agents | CPU (M a-ts/s) | GPU (M a-ts/s) | Speedup |
-|--------|:-:|:-:|:-:|
-| 10K    | 12 | 2.0 | 0.16x |
-| 100K   | 11 | 6.7 | 0.59x |
-| 500K   | 9  | 8.0 | 0.91x |
-| 1M     | 9  | 8.2 | 0.94x |
-| 5M     | 6  | 7.8 | **1.28x** |
+GPU runs honor the `Starsim.OPTIONS.crn_enabled = true` flag and
+`OPTIONS.slot_scale` for slot-based agent indexing, matching the CPU CRN
+scheme. Reproducibility holds run-to-run with the same seed and slot
+scale, including for cached-edge runs.
 
-GPU overtakes CPU at ~5M agents with cached edges — the crossover where
-GPU parallelism outweighs kernel launch overhead. Julia's CPU code is
-highly optimized on Apple Silicon (native SIMD), making GPU acceleration
-less impactful than on platforms with weaker CPUs or discrete GPUs. The
-GPU path is most useful for:
+## Supported features
 
-- Very large simulations (1M+ agents) with static networks
-- CUDA.jl / AMDGPU.jl on discrete GPUs (where dedicated VRAM and higher
-  memory bandwidth should improve the crossover point)
-- Demonstrating the GPU-ready architecture
+The GPU path supports:
 
-**Correctness**: GPU vs CPU mean trajectory correlation r > 0.999 for
-all three disease types (SIR, SIS, SEIR) over 30 seeds.
+- `SIR`, `SIS`, and `SEIR` diseases
+- `RandomNet`, `StaticNet`, and other `AbstractNetwork`s exposing
+  per-step edges
+- Multiple diseases co-existing in one sim
+- Multiple networks with per-network `beta` (passed as
+  `Dict{Symbol,Float64}`)
 
-## API reference
+## Restrictions
 
-| Function | Description |
-|----------|-------------|
-| `to_gpu(sim; backend=:auto)` | Convert initialized Sim to GPUSim |
-| `to_cpu(gsim)` | Copy GPU state back to CPU Sim |
-| `run_gpu!(sim; backend=:auto)` | Full GPU simulation lifecycle |
-| `gpu_step_state!(gsim, :sir; current_ti=ti)` | Recovery transitions on GPU |
-| `gpu_transmit!(gsim, :sir; current_ti=ti)` | Transmission with edge upload |
-| `cache_edges!(gsim)` | Upload edges once for static networks |
-| `gpu_transmit_cached!(gsim, :sir; current_ti=ti)` | Transmission with cached edges |
-| `sync_to_gpu!(gsim)` | Re-upload CPU state after CPU-side modifications |
+The GPU path will `error` (not silently degrade) for sims with:
 
-## Summary
+- `interventions`, `analyzers`, `connectors`, or `extra_modules`
+- `pars.use_aging = true`
+- `disease.p_death > 0` (use CPU `run!()` for disease-induced death)
+- Disease subtypes other than `SIR` / `SIS` / `SEIR` (e.g. STIsim’s
+  `SEIS`, `HIV`, `Syphilis`)
 
-Starsim.jl provides GPU acceleration for SIR, SIS, and SEIR disease
-models across three platforms: Apple Silicon (Metal.jl), NVIDIA (CUDA.jl),
-and AMD (AMDGPU.jl). All backends share the same API and implement
-identical algorithms. Metal benchmarks on Apple Silicon show GPU overtaking
-CPU at ~5M agents with cached edges; discrete NVIDIA/AMD GPUs with
-dedicated VRAM are expected to show larger speedups at smaller agent
-counts. The GPU path produces statistically identical results to the CPU
-path (r > 0.999).
+For these, fall back to the CPU `run!(sim)` path.
+
+## When GPU helps
+
+GPU acceleration is most useful for large agent populations (50k+
+agents) with many edges per step. For small sims, kernel launch and
+host↔device transfer overhead exceeds the parallel work.
+
+The cached-edge path widens the win when the network is static.
+
+## Implementation notes
+
+The GPU extension reuses several preallocated buffers on every step to
+avoid GC pressure:
+
+- GPU edge buffers (`edge_p1`, `edge_p2`, `edge_beta`, `rng_buf`)
+- CPU staging buffers (`cpu_p1_buf`, `cpu_p2_buf`, `cpu_beta_buf`,
+  `cpu_rng_buf`) used to assemble data before `copyto!` into GPU memory
+- A shared `new_infected` flag buffer (per-disease counts are
+  snapshotted immediately after each `gpu_transmit!` to support
+  `new_infections` result tracking)
+
+For the SIS disease only, immunity waning and boost still require a
+GPU↔CPU sync each step (because the `immunity` array is CPU-side). SIR
+and SEIR avoid that round-trip and run a “fast path” that only
+synchronizes results once per step.
