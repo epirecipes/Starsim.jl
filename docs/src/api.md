@@ -466,12 +466,24 @@ Starsim.plot_comparison
 Starsim.enzyme_sensitivity
 ```
 
-### Metal/GPU extension
+### GPU extension (Metal / CUDA / AMDGPU)
 
 ```@docs
 Starsim.to_gpu
 Starsim.to_cpu
 ```
+
+GPU execution is selected via the `backend` keyword to `run!`:
+
+```julia
+run!(sim; backend=:metal)   # Apple Silicon (requires `using Metal`)
+run!(sim; backend=:cuda)    # NVIDIA (requires `using CUDA`)
+run!(sim; backend=:amdgpu)  # AMD (requires `using AMDGPU`)
+run!(sim; backend=:gpu)     # auto-select if exactly one GPU package is loaded
+```
+
+For repeated runs over a static network, pass `cache_edges=true` to
+`run_gpu!` to upload edges once instead of per-step.
 
 ### Catlab extension
 
