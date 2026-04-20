@@ -18,10 +18,15 @@ gpu_synchronize() = Metal.synchronize()
 gpu_device() = Metal.current_device()
 @inline _gpu_thread_index() = thread_position_in_grid_1d()
 
+@inline function _gpu_kernel_launch(groups::Integer, kernel::F, args::Vararg{Any,N}) where {F,N}
+    Metal.@metal threads=GPU_THREADS groups=groups kernel(args...)
+end
+
 macro gpu_launch(groups, call)
-    groups_expr = esc(groups)
-    call_expr = esc(call)
-    return :(@metal threads=GPU_THREADS groups=$groups_expr $call_expr)
+    Meta.isexpr(call, :call) || error("@gpu_launch second argument must be a function call")
+    kernel = call.args[1]
+    kargs = call.args[2:end]
+    return esc(:( $_gpu_kernel_launch($groups, $kernel, $(kargs...)) ))
 end
 
 include("StarsimGPUCommon.jl")

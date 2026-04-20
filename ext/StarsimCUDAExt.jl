@@ -18,10 +18,15 @@ gpu_synchronize() = CUDA.synchronize()
 gpu_device() = CUDA.device()
 @inline _gpu_thread_index() = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
 
+@inline function _gpu_kernel_launch(groups::Integer, kernel::F, args::Vararg{Any,N}) where {F,N}
+    CUDA.@cuda threads=GPU_THREADS blocks=groups kernel(args...)
+end
+
 macro gpu_launch(groups, call)
-    groups_expr = esc(groups)
-    call_expr = esc(call)
-    return :(@cuda threads=GPU_THREADS blocks=$groups_expr $call_expr)
+    Meta.isexpr(call, :call) || error("@gpu_launch second argument must be a function call")
+    kernel = call.args[1]
+    kargs = call.args[2:end]
+    return esc(:( $_gpu_kernel_launch($groups, $kernel, $(kargs...)) ))
 end
 
 include("StarsimGPUCommon.jl")
