@@ -297,23 +297,24 @@ function step_state!(d::SIR, sim)
     recovered_raw = d.recovered.raw
 
     if d.p_death > 0.0
-        # With disease death: collect UIDs first, then process
-        rec_uids = state_lte(d.ti_recovered, ti_f)
-        alive_rec = intersect(rec_uids, uids(d.infection.infected))
-
-        if !isempty(alive_rec)
-            death_probs = rand(d.rng, length(alive_rec))
-            death_mask = death_probs .< d.p_death
-            death_uids = UIDs(alive_rec.values[death_mask])
-            recover_uids = UIDs(alive_rec.values[.!death_mask])
-
-            if !isempty(death_uids)
-                request_death!(sim.people, death_uids, ti)
+        # CRN-equivalent to the previous state_lte+intersect+batch-rand path:
+        # iterate auids, draw one rand per (infected ∩ ti_rec≤ti) agent in order,
+        # then route to death vs. recovery without intermediate Set/UIDs allocations.
+        rng = d.rng
+        p_d = d.p_death
+        death_buf = Int[]
+        @inbounds for u in active
+            if infected_raw[u] && ti_rec_raw[u] <= ti_f
+                if rand(rng) < p_d
+                    push!(death_buf, u)
+                else
+                    infected_raw[u] = false
+                    recovered_raw[u] = true
+                end
             end
-            if !isempty(recover_uids)
-                d.infection.infected[recover_uids] = false
-                d.recovered[recover_uids] = true
-            end
+        end
+        if !isempty(death_buf)
+            request_death!(sim.people, UIDs(death_buf), ti)
         end
     else
         # Common case: no death, zero-allocation loop
@@ -1069,20 +1070,21 @@ function step_state!(d::SEIR, sim)
 
     # Infected → Recovered (or dead)
     if d.p_death > 0.0
-        rec_uids = state_lte(d.ti_recovered, ti_f)
-        alive_rec = intersect(rec_uids, uids(d.infection.infected))
-        if !isempty(alive_rec)
-            death_probs = rand(rng, length(alive_rec))
-            death_mask = death_probs .< d.p_death
-            death_uids = UIDs(alive_rec.values[death_mask])
-            recover_uids = UIDs(alive_rec.values[.!death_mask])
-            if !isempty(death_uids)
-                request_death!(sim.people, death_uids, ti)
+        # CRN-equivalent fast path; see SIR step_state! for rationale.
+        p_d = d.p_death
+        death_buf = Int[]
+        @inbounds for u in active
+            if infected_raw[u] && ti_rec_raw[u] <= ti_f
+                if rand(rng) < p_d
+                    push!(death_buf, u)
+                else
+                    infected_raw[u] = false
+                    recovered_raw[u] = true
+                end
             end
-            if !isempty(recover_uids)
-                d.infection.infected[recover_uids] = false
-                d.recovered[recover_uids] = true
-            end
+        end
+        if !isempty(death_buf)
+            request_death!(sim.people, UIDs(death_buf), ti)
         end
     else
         @inbounds for u in active

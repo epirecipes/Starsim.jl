@@ -31,6 +31,12 @@ All notable changes to Starsim.jl are documented here.
   failing on `Expr(:escape, …)`. (`ef8edb2`)
 
 ### Performance
+- CPU `step_state!` for `SIR` and `SEIR` with `p_death > 0` (the default
+  for SIR) now uses a single zero-allocation pass over `auids` instead of
+  `state_lte` + `intersect` + batch-rand + `Set` ops. CRN-equivalent
+  (same iteration order, same number of `rand` draws). Yields a ~2x
+  end-to-end speedup on default SIR sims; n=100k went from ~3.07s to
+  ~1.44s, lifting Julia/Python ratio from 2.6x to ~5.5x.
 - `gpu_transmit!` and `cache_edges!` now reuse CPU staging buffers
   (`cpu_p1_buf`, `cpu_p2_buf`, `cpu_beta_buf`, `cpu_rng_buf`) on `GPUSim`
   instead of allocating fresh arrays per step per network. (`cfbf0be`)
