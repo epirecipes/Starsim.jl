@@ -1,0 +1,209 @@
+---
+title: "Impact of Outbreak Response Immunization timing on measles outbreaks (Python)"
+subtitle: "Python companion using starsim"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    toc: true
+engine: python
+---
+
+## Overview
+
+This is the Python companion to the Julia `18_ori` vignette. It reproduces the core analysis of [Delport et al. (2025)](https://gh.bmj.com/content/10/7/e016887) — the effect of Outbreak Response Immunization (ORI) timing on measles outbreak size — using Python `starsim`. The structure mirrors the Julia version closely: the same `SEIR` dynamics, the same `RandomNet`, and a custom intervention that performs symptomatic testing, outbreak detection, and phased vaccination with a linear efficacy ramp.
+
+## Model parameters
+
+```{python}
+import numpy as np
+import starsim as ss
+import pylab as pl
+
+N_AGENTS      = 10_000
+INIT_INFECTED = 5
+SIM_DAYS      = 365
+BETA          = 0.08
+N_CONTACTS    = 3.5
+DUR_EXP       = 10.5
+DUR_INF       = 8.0
+P_DEATH       = 0.005
+TEST_PROB     = 0.03
+TEST_SENS     = 0.87
+VAX_EFFICACY  = 0.83
+VAX_RAMP_DAYS = 10.0
+DAILY_DOSES   = 100
+```
+
+## Outbreak response intervention
+
+A single custom `Intervention` maintains all per-run state: diagnosed flags, the (shuffled) queue of susceptibles to vaccinate, the day of first detection, and per-agent `ti_vacc` used by the linear ramp on `rel_sus`.
+
+```{python}
+class OutbreakResponseImmunization(ss.Intervention):
+    def __init__(self, response_time=None, seed=0):
+        super().__init__()
+        self.response_time = response_time
+        self.rng = np.random.default_rng(seed)
+        self.diagnosed     = None
+        self.ti_vacc       = None
+        self.queue         = None
+        self.queue_pos     = 0
+        self.detected      = False
+        self.detection_day = None
+
+    def init_post(self):
+        n = len(self.sim.people)
+        self.diagnosed = np.zeros(n, dtype=bool)
+        self.ti_vacc   = np.full(n, np.nan)
+        return super().init_post()
+
+    def step(self):
+        sim  = self.sim
+        seir = sim.diseases.seir
+        day  = sim.ti
+
+        infected    = seir.infected.raw
+        susceptible = seir.susceptible.raw
+        rel_sus     = seir.rel_sus.raw
+
+        # 1. Symptomatic testing
+        candidates = np.where(infected & ~self.diagnosed)[0]
+        if len(candidates):
+            positive = (self.rng.random(len(candidates)) < TEST_PROB) & \
+                       (self.rng.random(len(candidates)) < TEST_SENS)
+            self.diagnosed[candidates[positive]] = True
+
+        # 2. Outbreak detection
+        if not self.detected and self.diagnosed.any():
+            self.detected      = True
+            self.detection_day = day
+            if self.response_time is not None:
+                susceptible_uids = np.where(susceptible)[0]
+                self.rng.shuffle(susceptible_uids)
+                self.queue = susceptible_uids.tolist()
+
+        # 3. Daily vaccination after delay
+        if (self.detected and self.response_time is not None
+                and day >= self.detection_day + self.response_time):
+            doses = 0
+            while doses < DAILY_DOSES and self.queue_pos < len(self.queue):
+                u = self.queue[self.queue_pos]
+                self.queue_pos += 1
+                if susceptible[u] and np.isnan(self.ti_vacc[u]):
+                    self.ti_vacc[u] = day
+                    doses += 1
+
+        # 4. Linear ramp of vaccine immunity
+        vaxed = ~np.isnan(self.ti_vacc) & susceptible
+        if vaxed.any():
+            ramp = np.clip((day - self.ti_vacc[vaxed]) / VAX_RAMP_DAYS, 0.0, 1.0)
+            rel_sus[vaxed] = 1.0 - VAX_EFFICACY * ramp
+```
+
+## Building a sim
+
+```{python}
+def make_sim(response_time, seed, stop=SIM_DAYS, n_agents=N_AGENTS):
+    return ss.Sim(
+        n_agents      = n_agents,
+        networks      = ss.RandomNet(n_contacts=N_CONTACTS),
+        diseases      = ss.SEIR(
+            beta      = BETA,
+            dur_exp   = DUR_EXP,
+            dur_inf   = DUR_INF,
+            p_death   = P_DEATH,
+            init_prev = INIT_INFECTED / n_agents,
+        ),
+        interventions = OutbreakResponseImmunization(response_time=response_time, seed=seed),
+        dt            = 1.0,
+        start         = 0,
+        stop          = stop,
+        rand_seed     = seed,
+        verbose       = 0,
+    )
+
+def cum_inf(sim):
+    return float(np.sum(sim.results.seir.new_infections))
+```
+
+## Single illustrative runs
+
+```{python}
+sim_baseline = make_sim(None, seed=1); sim_baseline.run()
+sim_fast     = make_sim(15,   seed=1); sim_fast.run()
+sim_slow     = make_sim(90,   seed=1); sim_slow.run()
+
+print("Cumulative infections (single run, seed=1):")
+print(f"  No ORI:          {int(cum_inf(sim_baseline))}")
+print(f"  ORI at 15 days:  {int(cum_inf(sim_fast))}")
+print(f"  ORI at 90 days:  {int(cum_inf(sim_slow))}")
+```
+
+## Scenario sweep
+
+```{python}
+def run_scenarios(response_times, n_seeds=25):
+    results = {}
+    for rt in response_times:
+        finals = []
+        for s in range(1, n_seeds + 1):
+            sim = make_sim(rt, seed=s)
+            sim.run()
+            finals.append(cum_inf(sim))
+        results[rt] = np.array(finals)
+    return results
+
+response_times = [None, 15, 30, 60, 90, 120]
+scenario_results = run_scenarios(response_times, n_seeds=25)
+
+print("Scenario           Mean cum. infections   (sd)")
+for rt in response_times:
+    label = "No ORI" if rt is None else f"ORI @ {rt} days"
+    vals = scenario_results[rt]
+    print(f"{label:<18}{int(vals.mean()):>10}   ({vals.std():.1f})")
+```
+
+```{python}
+labels = ["No ORI" if rt is None else str(rt) for rt in response_times]
+means  = [scenario_results[rt].mean() for rt in response_times]
+sds    = [scenario_results[rt].std()  for rt in response_times]
+
+pl.figure()
+pl.bar(labels, means, yerr=sds, capsize=4)
+pl.xlabel("ORI response time (days)")
+pl.ylabel("Cumulative infections")
+pl.title("Impact of ORI response timing on measles outbreak size")
+pl.tight_layout()
+pl.show()
+```
+
+## Epidemic curves
+
+```{python}
+def ensemble_curves(rt, n_seeds=10):
+    curves = []
+    for s in range(1, n_seeds + 1):
+        sim = make_sim(rt, seed=s); sim.run()
+        curves.append(np.array(sim.results.seir.new_infections))
+    return np.vstack(curves)
+
+pl.figure()
+for rt, label in [(None, "No ORI"), (15, "15 days"), (60, "60 days"), (120, "120 days")]:
+    curves = ensemble_curves(rt, n_seeds=10)
+    pl.plot(curves.mean(axis=0), label=label, linewidth=2)
+pl.xlabel("Day")
+pl.ylabel("New infections")
+pl.title("Daily incidence by ORI response time")
+pl.legend()
+pl.tight_layout()
+pl.show()
+```
+
+## Discussion
+
+The Python version mirrors the Julia implementation: `SEIR` plus a `RandomNet`, wrapped in an `ss.Sim`, with a single custom `ss.Intervention` subclass that handles symptomatic testing, outbreak detection, phased vaccination, and the linear ramp of vaccine efficacy on `rel_sus`. As in the Julia companion, some simplifications relative to the original Delport et al. ABM (fixed-mean exposed/infectious durations rather than per-agent `Uniform`/`Normal` draws; fixed contact degree rather than Poisson) are made for readability; the qualitative ORI-timing effect — shorter response times avert substantially more cases — is preserved across both implementations.
