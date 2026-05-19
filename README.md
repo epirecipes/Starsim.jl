@@ -8,6 +8,7 @@
 
 ```julia
 using Starsim
+using Plots
 
 sim = Sim(
     n_agents = 5_000,
@@ -15,6 +16,7 @@ sim = Sim(
     diseases = [SIR(beta=0.05, init_prev=0.01)],
 )
 run!(sim)
+plot(sim)
 ```
 
 ## Installation
